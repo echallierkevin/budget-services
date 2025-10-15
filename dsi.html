@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DSI – Budgets par Projets</title>
+  <style>
+    :root{
+      --bg:#ffffff;
+      --panel:#ffffff;
+      --muted:#717274;
+      --text:#111827;
+      --accent:#FDC300;
+      --danger:#ef4444;
+      --border:#e5e7eb;
+      --progress-bg:#f3f4f6;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Helvetica,Arial,sans-serif}
+    .wrap{max-width:1200px;margin:32px auto;padding:0 16px}
+    h1,h2{margin:0 0 .5rem}
+    h1{font-size:1.35rem}
+    h2{font-size:1.1rem;color:var(--muted)}
+    .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    .spacer{flex:1}
+    .card{background:#fff;border:1px solid var(--border);border-radius:16px;padding:16px}
+    .grid{display:grid;gap:16px}
+    .grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+    @media (max-width:900px){.grid-cols-2{grid-template-columns:1fr}}
+    label{display:block;margin:0 0 6px;color:var(--muted)}
+    input,select,button{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#fff;color:var(--text)}
+    input[type="date"]{padding:8px 10px}
+    button{cursor:pointer;font-weight:700;border:1px solid transparent;background:var(--accent);color:#3b2c00}
+    button.ghost{background:#fff;border-color:var(--border)}
+    button.danger{background:var(--danger);color:#fff}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:10px;border-bottom:1px solid var(--border);text-align:left}
+    th{color:var(--muted)}
+    .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+    @media (max-width:720px){.kpis{grid-template-columns:1fr 1fr}}
+    .kpi{background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px}
+    .kpi .label{color:var(--muted);font-size:.9rem}
+    .kpi .value{font-size:1.2rem;font-weight:700;margin-top:6px}
+    .hr{height:1px;background:var(--border);margin:14px 0}
+    .hint{color:var(--muted)}
+    .progress{height:10px;background:var(--progress-bg);border-radius:999px;border:1px solid var(--border);overflow:hidden}
+    .progress>span{display:block;height:100%;background:var(--accent)}
+    .badge{display:inline-flex;gap:6px;padding:4px 8px;border-radius:999px;font-weight:600;font-size:.85rem;border:1px solid rgba(0,0,0,.08)}
+    .ok{background:rgba(34,197,94,.10);color:#166534}
+    .watch{background:rgba(245,158,11,.10);color:#92400e}
+    .over{background:rgba(239,68,68,.10);color:#991b1b}
+    .brand{display:flex;align-items:center;gap:12px}
+    .brand img{height:40px;border-radius:6px}
+    .brand-name{font-weight:800;color:#0f172a}
+    /* historique */
+    .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+    .toolbar .spacer{flex:1}
+    .pill{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border);padding:6px 10px;border-radius:999px;background:#fff;color:#0f172a;font-weight:700}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="row">
+      <div class="brand">
+        <img
+          src="https://cevitalspa.sharepoint.com/sites/OXXO-Portail/_api/siteiconmanager/getsitelogo?type=%271%27&hash=638888580205157645"
+          alt="Logo" onerror="this.style.display='none'"/>
+        <div>
+          <div class="brand-name"><span id="svcTitle">DSI</span> – Budgets par Projets</div>
+          <div class="hint">Créer des projets, définir les budgets, saisir des dépenses</div>
+        </div>
+      </div>
+      <div class="spacer"></div>
+      <label class="hint" for="yearSelect">Exercice</label>
+      <select id="yearSelect" style="min-width:180px"></select>
+    </div>
+
+    <div class="hr"></div>
+
+    <div class="kpis">
+      <div class="kpi"><div class="label">Budget (service)</div><div class="value" id="kpiBudget">–</div></div>
+      <div class="kpi"><div class="label">Dépenses (service)</div><div class="value" id="kpiSpent">–</div></div>
+      <div class="kpi"><div class="label">Reste</div><div class="value" id="kpiLeft">–</div></div>
+      <div class="kpi"><div class="label">% utilisé</div><div class="value" id="kpiUsed">–</div></div>
+    </div>
+
+    <div class="hr"></div>
+
+    <div class="grid grid-cols-2">
+      <div class="card">
+        <h2>Ajouter / modifier un projet</h2>
+        <div class="row">
+          <div style="flex:1">
+            <label for="projectName">Nom du projet</label>
+            <input id="projectName" placeholder="Ex. ERP, Modernisation poste, ..."/>
+          </div>
+          <div style="width:220px;max-width:100%">
+            <label for="projectBudget">Budget (€)</label>
+            <input id="projectBudget" type="number" min="0" step="0.01" placeholder="Ex. 12000"/>
+          </div>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button id="saveProjectBtn">Enregistrer le projet</button>
+          <button id="resetProjectBtn" class="ghost">Réinitialiser le formulaire</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Saisir une dépense</h2>
+        <div class="row">
+          <div style="flex:1">
+            <label for="expenseProject">Projet</label>
+            <select id="expenseProject"></select>
+          </div>
+          <div style="width:180px;max-width:100%">
+            <label for="expenseAmount">Montant (€)</label>
+            <input id="expenseAmount" type="number" min="0" step="0.01" placeholder="Ex. 500"/>
+          </div>
+          <div style="width:180px;max-width:100%">
+            <label for="expenseDate">Date</label>
+            <input id="expenseDate" type="date"/>
+          </div>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button id="addExpenseBtn">Ajouter la dépense</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h2>Projets du service</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Projet</th>
+            <th>Budget</th>
+            <th>Dépenses</th>
+            <th>Reste</th>
+            <th>Avancement</th>
+            <th>Statut</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="projectsTbody"></tbody>
+      </table>
+      <div class="hint">Astuce : ✏️ charge un projet dans le formulaire, 🗑️ supprime le projet.</div>
+    </div>
+
+    <!-- NOUVEAU : Historique des dépenses -->
+    <div class="card" style="margin-top:16px">
+      <div class="row">
+        <h2>Historique des dépenses (<span id="histYear">—</span>)</h2>
+        <div class="spacer"></div>
+        <span class="pill">Service : <strong id="histService">DSI</strong></span>
+      </div>
+      <div class="toolbar">
+        <input id="histSearch" placeholder="Rechercher (projet)..." style="flex:1; min-width:240px" />
+        <select id="histSort" style="width:auto">
+          <option value="createdAt_desc">Tri : Ajouté le ↓</option>
+          <option value="createdAt_asc">Tri : Ajouté le ↑</option>
+          <option value="date_desc">Tri : Date dépense ↓</option>
+          <option value="date_asc">Tri : Date dépense ↑</option>
+          <option value="amount_desc">Tri : Montant ↓</option>
+          <option value="amount_asc">Tri : Montant ↑</option>
+        </select>
+        <button id="histClear" class="ghost">Effacer</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Projet</th>
+            <th>Montant</th>
+            <th>Date dépense</th>
+            <th>Ajouté le</th>
+          </tr>
+        </thead>
+        <tbody id="histTbody"></tbody>
+      </table>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h2>Export / Import</h2>
+      <div class="row">
+        <button id="exportBtn">Exporter (JSON)</button>
+        <input id="importFile" type="file" accept="application/json" style="display:none" />
+        <button id="importBtn">Importer (JSON)</button>
+        <div class="spacer"></div>
+        <span class="hint">Sauvegarde/restaure l’état complet (tous services et exercices).</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function(){
+    // === CONFIG SERVICE ===
+    const SERVICE_NAME = "DSI"; // garder "DSI" pour ce fichier
+
+    // --- Constantes & DOM ---
+    const SERVICES = ["Marketing","RH","DSI","Production","Logistique"];
+    const LS_PREFIX = "bt-state-";
+    const ADD_YEAR_VALUE="__add__";
+
+    const svcTitle = document.getElementById('svcTitle');
+    svcTitle.textContent = SERVICE_NAME;
+
+    const yearSelect = document.getElementById('yearSelect');
+
+    const projectName = document.getElementById('projectName');
+    const projectBudget = document.getElementById('projectBudget');
+    const saveProjectBtn = document.getElementById('saveProjectBtn');
+    const resetProjectBtn = document.getElementById('resetProjectBtn');
+
+    const expenseProject = document.getElementById('expenseProject');
+    const expenseAmount = document.getElementById('expenseAmount');
+    const expenseDate = document.getElementById('expenseDate');
+    const addExpenseBtn = document.getElementById('addExpenseBtn');
+
+    const projectsTbody = document.getElementById('projectsTbody');
+
+    const kpiBudget = document.getElementById('kpiBudget');
+    const kpiSpent = document.getElementById('kpiSpent');
+    const kpiLeft = document.getElementById('kpiLeft');
+    const kpiUsed = document.getElementById('kpiUsed');
+
+    // Historique
+    const histYear = document.getElementById('histYear');
+    const histService = document.getElementById('histService');
+    const histSearch = document.getElementById('histSearch');
+    const histSort = document.getElementById('histSort');
+    const histClear = document.getElementById('histClear');
+    const histTbody = document.getElementById('histTbody');
+
+    // Export/Import
+    const exportBtn = document.getElementById('exportBtn');
+    const importBtn = document.getElementById('importBtn');
+    const importFile = document.getElementById('importFile');
+
+    // --- Utils ---
+    const fmtEUR = new Intl.NumberFormat('fr-FR', { style:'currency', currency:'EUR' });
+    function getKey(year){ return "bt-state-"+String(year); }
+    function todayISO(){ return new Date().toISOString().slice(0,10); }
+    function uuid(){ return (crypto.randomUUID ? crypto.randomUUID() : ('p-'+Date.now()+Math.random())); }
+    function parseY(d){ return Number(String(d||'').slice(0,4)); }
+    function fmtDate(d){ if(!d) return '—'; try{ const dt=new Date(d); return dt.toLocaleString('fr-FR'); }catch{ return d; } }
+
+    // --- State helpers ---
+    function emptyState(year){
+      const services={}; SERVICES.forEach(s=> services[s]={projects:[]});
+      return { year, services };
+    }
+    function ensureSchema(state){
+      if(!state.services){
+        const services={}; SERVICES.forEach(s=> services[s]={projects:[]});
+        state = { year: state.year, services };
+      }
+      SERVICES.forEach(s=>{
+        if(!state.services[s]) state.services[s]={projects:[]};
+        state.services[s].projects = state.services[s].projects || [];
+        state.services[s].projects.forEach(p=>{
+          p.expenses = Array.isArray(p.expenses)?p.expenses:[];
+        });
+      });
+      return state;
+    }
+    function loadYears(){
+      const years=[];
+      for(let i=0;i<localStorage.length;i++){
+        const k=localStorage.key(i);
+        if(k && k.startsWith(LS_PREFIX)){
+          const y=parseInt(k.replace(LS_PREFIX,''),10);
+          if(!Number.isNaN(y)) years.push(y);
+        }
+      }
+      if(years.length===0) years.push(new Date().getFullYear());
+      years.sort((a,b)=>a-b);
+      return years;
+    }
+    function loadState(year){
+      const raw = localStorage.getItem(getKey(year));
+      if(!raw){
+        const st = emptyState(year);
+        localStorage.setItem(getKey(year), JSON.stringify(st));
+        return st;
+      }
+      try{ return ensureSchema(JSON.parse(raw)); }
+      catch(e){
+        const st = emptyState(year);
+        localStorage.setItem(getKey(year), JSON.stringify(st));
+        return st;
+      }
+    }
+    function saveState(state){
+      localStorage.setItem(getKey(state.year), JSON.stringify(state));
+    }
+
+    function setYearOptions(selected){
+      const years = loadYears();
+      yearSelect.innerHTML='';
+      years.forEach(y=>{
+        const opt=document.createElement('option');
+        opt.value=y; opt.textContent=y;
+        if(String(y)===String(selected)) opt.selected=true;
+        yearSelect.appendChild(opt);
+      });
+      const optAdd=document.createElement('option');
+      optAdd.value=ADD_YEAR_VALUE;
+      optAdd.textContent="➕ Ajouter un exercice…";
+      yearSelect.appendChild(optAdd);
+    }
+
+    // --- Calculs ---
+    function totalsForService(state){
+      const svc = state.services[SERVICE_NAME] || {projects:[]};
+      const budget = svc.projects.reduce((a,p)=> a + Number(p.budget||0), 0);
+      const spent  = svc.projects.reduce((a,p)=> a + (p.expenses||[]).reduce((x,e)=> x + Number(e.amount||0), 0), 0);
+      return { budget, spent, left: budget - spent };
+    }
+    function totalsForProject(p){
+      const spent = (p.expenses||[]).reduce((a,e)=> a + Number(e.amount||0), 0);
+      const left  = Number(p.budget||0) - spent;
+      const pct   = p.budget>0 ? (spent/p.budget)*100 : (spent>0?999:0);
+      return { spent, left, pct };
+    }
+    function statusFor(pct){
+      if(pct<=90) return {cls:'ok', txt:'✅ OK'};
+      if(pct<=100) return {cls:'watch', txt:'⚠️ À surveiller'};
+      return {cls:'over', txt:'❌ Dépassement'};
+    }
+
+    function refreshProjectSelect(state){
+      const svc = state.services[SERVICE_NAME];
+      expenseProject.innerHTML='';
+      (svc.projects||[]).forEach(p=>{
+        const opt=document.createElement('option');
+        opt.value=p.id; opt.textContent=p.name; expenseProject.appendChild(opt);
+      });
+    }
+
+    // --- Render Projets + KPIs ---
+    function render(year){
+      const state = loadState(year);
+      const svc = state.services[SERVICE_NAME];
+      // KPIs
+      const t=totalsForService(state);
+      const used = t.budget>0 ? (t.spent/t.budget)*100 : (t.spent>0?999:0);
+      kpiBudget.textContent = fmtEUR.format(t.budget);
+      kpiSpent.textContent  = fmtEUR.format(t.spent);
+      kpiLeft.textContent   = fmtEUR.format(t.left);
+      kpiUsed.textContent   = used===999?'>100%':used.toFixed(1)+' %';
+
+      // Projets
+      projectsTbody.innerHTML='';
+      (svc.projects||[]).forEach(p=>{
+        const {spent,left,pct} = totalsForProject(p);
+        const pctClamped = Math.min(pct,100);
+        const st = statusFor(pct);
+        const tr=document.createElement('tr');
+        tr.innerHTML = `
+          <td>${p.name}</td>
+          <td>${p.budget?fmtEUR.format(p.budget):'<span class="hint">—</span>'}</td>
+          <td>${fmtEUR.format(spent)}</td>
+          <td style="color:${left<0?'#991b1b':'inherit'}">${fmtEUR.format(left)}</td>
+          <td style="min-width:160px">
+            <div class="progress"><span style="width:${pctClamped.toFixed(1)}%"></span></div>
+            <div class="hint">${pct===999?'>100%':pct.toFixed(1)+' %'}</div>
+          </td>
+          <td><span class="badge ${st.cls}">${st.txt}</span></td>
+          <td>
+            <button class="ghost" data-edit="${p.id}">✏️</button>
+            <button class="ghost" data-del="${p.id}">🗑️</button>
+          </td>
+        `;
+        projectsTbody.appendChild(tr);
+      });
+
+      // Select dépenses
+      refreshProjectSelect(state);
+
+      // Historique (exercice)
+      renderHistory(state, year);
+
+      if(!expenseDate.value) expenseDate.value = todayISO();
+      histService.textContent = SERVICE_NAME;
+      histYear.textContent = String(year);
+    }
+
+    // --- Historique des dépenses ---
+    function collectExpensesForYear(state, year){
+      const svc = state.services[SERVICE_NAME] || {projects:[]};
+      const items = [];
+      (svc.projects||[]).forEach(p=>{
+        (p.expenses||[]).forEach(e=>{
+          if(parseY(e.date) === year){
+            items.push({
+              projectId: p.id,
+              projectName: p.name,
+              amount: Number(e.amount||0),
+              date: e.date, // date de dépense (YYYY-MM-DD)
+              createdAt: e.createdAt || e.date, // fallback si ancien enregistrement
+            });
+          }
+        });
+      });
+      return items;
+    }
+    function sortExpenses(list, mode){
+      const cmp = {
+        'createdAt_desc': (a,b)=> new Date(b.createdAt) - new Date(a.createdAt),
+        'createdAt_asc' : (a,b)=> new Date(a.createdAt) - new Date(b.createdAt),
+        'date_desc'     : (a,b)=> new Date(b.date) - new Date(a.date),
+        'date_asc'      : (a,b)=> new Date(a.date) - new Date(b.date),
+        'amount_desc'   : (a,b)=> b.amount - a.amount,
+        'amount_asc'    : (a,b)=> a.amount - b.amount,
+      }[mode] || ((a,b)=> new Date(b.createdAt) - new Date(a.createdAt));
+      return list.slice().sort(cmp);
+    }
+    function renderHistory(state, year){
+      const q = (histSearch.value||'').trim().toLowerCase();
+      let list = collectExpensesForYear(state, year);
+      if(q){
+        list = list.filter(x =>
+          (x.projectName||'').toLowerCase().includes(q)
+        );
+      }
+      list = sortExpenses(list, histSort.value);
+      histTbody.innerHTML = '';
+      if(list.length===0){
+        histTbody.innerHTML = `<tr><td colspan="5" class="hint">Aucune dépense${q?' pour votre recherche':''}.</td></tr>`;
+        return;
+      }
+      list.forEach(x=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${x.projectName}</td>
+          <td>${fmtEUR.format(x.amount)}</td>
+          <td>${x.date || '—'}</td>
+          <td>${fmtDate(x.createdAt)}</td>
+        `;
+        histTbody.appendChild(tr);
+      });
+    }
+
+    // --- Actions Projets ---
+    let editingId = null;
+
+    saveProjectBtn.addEventListener('click', ()=>{
+      const year = Number(yearSelect.value);
+      const state = loadState(year);
+      const svc = state.services[SERVICE_NAME];
+
+      const name = (projectName.value||'').trim();
+      const budget = Number(projectBudget.value||0);
+      if(!name){ alert('Nom de projet requis'); return; }
+      if(!(budget>=0)){ alert('Budget invalide'); return; }
+
+      if(editingId){
+        const p = (svc.projects||[]).find(x=>x.id===editingId);
+        if(p){ p.name = name; p.budget = budget; }
+      }else{
+        (svc.projects = svc.projects || []).push({ id: uuid(), name, budget, expenses: [] });
+      }
+
+      saveState(state);
+      editingId = null;
+      projectName.value=''; projectBudget.value='';
+      render(year);
+    });
+
+    resetProjectBtn.addEventListener('click', ()=>{
+      editingId=null; projectName.value=''; projectBudget.value='';
+    });
+
+    projectsTbody.addEventListener('click', (e)=>{
+      const t = e.target;
+      if(!(t instanceof HTMLElement)) return;
+      const year = Number(yearSelect.value);
+      const state = loadState(year);
+      const svc = state.services[SERVICE_NAME];
+
+      if(t.dataset.edit){
+        const p = (svc.projects||[]).find(x=>x.id===t.dataset.edit);
+        if(p){ editingId = p.id; projectName.value=p.name; projectBudget.value=p.budget; window.scrollTo({top:0, behavior:'smooth'}); }
+      }
+      if(t.dataset.del){
+        if(!confirm('Supprimer ce projet ?')) return;
+        svc.projects = (svc.projects||[]).filter(x=>x.id!==t.dataset.del);
+        saveState(state);
+        render(year);
+      }
+    });
+
+    // --- Dépenses ---
+    addExpenseBtn.addEventListener('click', ()=>{
+      const year = Number(yearSelect.value);
+      const state = loadState(year);
+      const svc = state.services[SERVICE_NAME];
+
+      const pid = expenseProject.value;
+      const amt = Number(expenseAmount.value||0);
+      const dt  = expenseDate.value || todayISO();
+
+      if(!pid){ alert('Sélectionnez un projet'); return; }
+      if(!(amt>0)){ alert('Montant invalide (>0)'); return; }
+      if(!/\d{4}-\d{2}-\d{2}/.test(dt)){ alert('Date invalide'); return; }
+
+      const p = (svc.projects||[]).find(x=>x.id===pid);
+      if(!p){ alert('Projet introuvable'); return; }
+
+      // NOUVEAU : on stocke createdAt pour tracer quand l’ajout a été fait
+      p.expenses.push({ amount: amt, date: dt, createdAt: new Date().toISOString() });
+      saveState(state);
+
+      expenseAmount.value='';
+      render(year); // rafraîchit projets + historique
+    });
+
+    // --- Year select ---
+    function setYearOptions(selected){
+      const years = loadYears();
+      yearSelect.innerHTML='';
+      years.forEach(y=>{
+        const opt=document.createElement('option');
+        opt.value=y; opt.textContent=y;
+        if(String(y)===String(selected)) opt.selected=true;
+        yearSelect.appendChild(opt);
+      });
+      const optAdd=document.createElement('option');
+      optAdd.value=ADD_YEAR_VALUE;
+      optAdd.textContent="➕ Ajouter un exercice…";
+      yearSelect.appendChild(optAdd);
+    }
+
+    yearSelect.addEventListener('change', ()=>{
+      if(yearSelect.value===ADD_YEAR_VALUE){
+        const y = prompt("Nouvel exercice (YYYY) :", String(new Date().getFullYear()+1));
+        if(!y){ setYearOptions(loadYears().slice(-1)[0]); render(Number(yearSelect.value)); return; }
+        const ny=parseInt(y,10);
+        if(!ny || ny<2000 || ny>9999){ alert('Année invalide.'); setYearOptions(loadYears().slice(-1)[0]); render(Number(yearSelect.value)); return; }
+        if(!localStorage.getItem(getKey(ny))){
+          localStorage.setItem(getKey(ny), JSON.stringify(emptyState(ny)));
+        }
+        setYearOptions(ny); render(ny);
+      }else{
+        render(Number(yearSelect.value));
+      }
+    });
+
+    // --- Historique interactions ---
+    histSearch.addEventListener('input', ()=>{
+      const y = Number(yearSelect.value);
+      const st = loadState(y);
+      renderHistory(st, y);
+    });
+    histSort.addEventListener('change', ()=>{
+      const y = Number(yearSelect.value);
+      const st = loadState(y);
+      renderHistory(st, y);
+    });
+    histClear.addEventListener('click', ()=>{
+      histSearch.value=''; histSort.value='createdAt_desc';
+      const y = Number(yearSelect.value);
+      const st = loadState(y);
+      renderHistory(st, y);
+    });
+
+    // --- Init ---
+    (function init(){
+      document.title = SERVICE_NAME + " – Budgets par Projets";
+      const years = loadYears();
+      const urlYear = new URLSearchParams(location.search).get('year');
+      const current = urlYear ? Number(urlYear) :
+        (years.includes(new Date().getFullYear()) ? new Date().getFullYear() : years[years.length-1]);
+
+      setYearOptions(current);
+      render(current);
+      if(!expenseDate.value) expenseDate.value = todayISO();
+    })();
+  })();
+  </script>
+</body>
+</html>

@@ -3,471 +3,500 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Suivi Budgets par Service</title>
+  <title>Aperçu – Budgets par Service</title>
   <style>
     :root{
-      --bg:#ffffff;            /* fond blanc */
-      --panel:#ffffff;         /* cartes blanches */
-      --muted:#717274;         /* gris brand */
-      --text:#111827;          /* texte sombre */
-      --accent:#FDC300;        /* jaune brand */
-      --warn:#f59e0b;
+      --bg:#ffffff;
+      --panel:#ffffff;
+      --muted:#717274;
+      --text:#111827;
+      --accent:#FDC300;
       --danger:#ef4444;
-      --card:#ffffff;
-      --border:#e5e7eb;        /* gris clair pour bordures sur fond blanc */
-      --progress-bg:#f3f4f6;   /* arrière-plan des barres */
+      --border:#e5e7eb;
+      --progress-bg:#f3f4f6;
+      --backdrop:rgba(17,24,39,.55);
     }
     *{box-sizing:border-box}
-    html,body{height:100%}
     body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Helvetica,Arial,sans-serif}
+    .wrap{max-width:1200px;margin:32px auto;padding:0 16px}
     h1,h2{margin:0 0 .5rem}
     h1{font-size:1.35rem}
     h2{font-size:1.1rem;color:var(--muted)}
-    .wrap{max-width:1200px;margin:32px auto;padding:0 16px}
-
-    .grid{display:grid;gap:16px}
-    .grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
-    @media (max-width:720px){.grid-cols-2{grid-template-columns:1fr}}
-
-    .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px}
-    .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+    .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
     .spacer{flex:1}
+    .card{background:#fff;border:1px solid var(--border);border-radius:16px;padding:16px}
     label{display:block;margin:0 0 6px;color:var(--muted)}
-    select,input,button{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#ffffff;color:var(--text)}
-    input[type="date"]{padding:8px 10px}
-    button{cursor:pointer;border:1px solid transparent;background:var(--accent);color:#3b2c00;font-weight:700}
-    button.ghost{background:#ffffff;border-color:var(--border);color:var(--text)}
-    button.danger{background:var(--danger);color:#ffffff;border:none}
-    button:disabled{opacity:.6;cursor:not-allowed}
-
-    table{width:100%;border-collapse:collapse;background:#ffffff}
-    th,td{padding:10px;border-bottom:1px solid var(--border);text-align:left}
-    th{color:var(--muted);font-weight:600}
-    tbody tr:hover{background:#fafafa}
-
+    select,button{padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#fff;color:var(--text)}
+    button{cursor:pointer;font-weight:700;border:1px solid transparent;background:var(--accent);color:#3b2c00}
     .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
     @media (max-width:720px){.kpis{grid-template-columns:1fr 1fr}}
-    .kpi{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px}
+    .kpi{background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px}
     .kpi .label{color:var(--muted);font-size:.9rem}
-    .kpi .value{font-size:1.2rem;font-weight:700;margin-top:6px;color:#0f172a}
-
+    .kpi .value{font-size:1.2rem;font-weight:700;margin-top:6px}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:10px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}
+    th{color:var(--muted)}
     .progress{height:10px;background:var(--progress-bg);border-radius:999px;border:1px solid var(--border);overflow:hidden}
-    .progress>span{display:block;height:100%;background:var(--accent);width:0}
-    .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;font-weight:600;font-size:.85rem}
-    .ok{background:rgba(34,197,94,.10);color:#166534;border:1px solid rgba(34,197,94,.35)}
-    .watch{background:rgba(245,158,11,.10);color:#92400e;border:1px solid rgba(245,158,11,.35)}
-    .over{background:rgba(239,68,68,.10);color:#991b1b;border:1px solid rgba(239,68,68,.35)}
-
+    .progress>span{display:block;height:100%;background:var(--accent)}
+    .badge{display:inline-flex;gap:6px;padding:4px 8px;border-radius:999px;font-weight:600;font-size:.85rem;border:1px solid rgba(0,0,0,.08)}
+    .ok{background:rgba(34,197,94,.10);color:#166534}
+    .watch{background:rgba(245,158,11,.10);color:#92400e}
+    .over{background:rgba(239,68,68,.10);color:#991b1b}
     .hr{height:1px;background:var(--border);margin:14px 0}
-    .hint{color:var(--muted);font-size:.9rem}
-    .footer{color:var(--muted);font-size:.85rem;margin-top:16px}
-
-    .title-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    .hint{color:var(--muted)}
     .brand{display:flex;align-items:center;gap:12px}
-    .brand img{height:40px;width:auto;display:block;border-radius:6px}
-    .brand-name{font-weight:800;letter-spacing:.2px;color:#0f172a}
+    .brand img{height:40px;border-radius:6px}
+    .brand-name{font-weight:800;color:#0f172a}
+
+    /* ==== Drawer détail ==== */
+    .overlay{position:fixed;inset:0;background:var(--backdrop);display:none;opacity:0;transition:opacity .2s ease;z-index:50}
+    .overlay.open{display:block;opacity:1}
+    .sheet{position:fixed;top:0;right:0;height:100%;width:min(900px,100%);background:#fff;border-left:1px solid var(--border);
+      transform:translateX(100%);transition:transform .25s ease;z-index:51;display:flex;flex-direction:column}
+    .overlay.open + .sheet{transform:translateX(0)}
+    .sheet-head{display:flex;align-items:center;gap:12px;padding:16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:#fff;z-index:1}
+    .sheet-title{font-weight:800}
+    .pill{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border);padding:6px 10px;border-radius:999px;background:#fff}
+    .close-btn{background:#fff;border:1px solid var(--border)}
+    .sheet-body{padding:16px;overflow:auto;height:100%}
+    .kpis-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:12px}
+    @media (max-width:720px){.kpis-row{grid-template-columns:1fr 1fr}}
+    .mini-kpi{background:#fff;border:1px solid var(--border);border-radius:12px;padding:10px}
+    .mini-kpi .label{color:var(--muted);font-size:.85rem}
+    .mini-kpi .value{font-weight:800;margin-top:4px}
+    .mini-table{width:100%;border-collapse:collapse}
+    .mini-table th,.mini-table td{padding:10px;border-bottom:1px solid var(--border)}
+    .sheet-foot{padding:12px 16px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
+    .search{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+    .search input{flex:1;padding:10px 12px;border-radius:10px;border:1px solid var(--border)}
+    .ghost{background:#fff;border:1px solid var(--border)}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="title-row">
+    <div class="row">
       <div class="brand">
-        <!-- Logo : masqué automatiquement si non accessible -->
         <img
           src="https://cevitalspa.sharepoint.com/sites/OXXO-Portail/_api/siteiconmanager/getsitelogo?type=%271%27&hash=638888580205157645"
-          alt="Logo"
-          onerror="this.style.display='none'"
-        />
+          alt="Logo" onerror="this.style.display='none'"/>
         <div>
-          <div class="brand-name">Outil Budget Services</div>
-          <div class="hint">Suivi par exercice</div>
+          <div class="brand-name">Aperçu – Budgets par Service</div>
+          <div class="hint">Vue globale. Ouvre un panneau latéral clair pour voir les projets d’un service.</div>
         </div>
       </div>
       <div class="spacer"></div>
-      <label for="yearSelect" class="hint">Exercice</label>
-      <select id="yearSelect" style="width:auto;min-width:180px"></select>
+      <label class="hint" for="yearSelect">Exercice</label>
+      <select id="yearSelect" style="min-width:180px"></select>
     </div>
 
     <div class="hr"></div>
 
-    <!-- Indicateurs globaux -->
-    <div class="kpis" id="globalKpis">
-      <div class="kpi"><div class="label">Budget global</div><div class="value" id="kpiBudget">–</div></div>
-      <div class="kpi"><div class="label">Dépenses globales</div><div class="value" id="kpiSpent">–</div></div>
-      <div class="kpi"><div class="label">Reste disponible</div><div class="value" id="kpiLeft">–</div></div>
-      <div class="kpi"><div class="label">% utilisé</div><div class="value" id="kpiUsed">–</div></div>
+    <div class="kpis">
+      <div class="kpi"><div class="label">Budget global</div><div id="kpiBudget" class="value">–</div></div>
+      <div class="kpi"><div class="label">Dépenses globales</div><div id="kpiSpent" class="value">–</div></div>
+      <div class="kpi"><div class="label">Reste disponible</div><div id="kpiLeft" class="value">–</div></div>
+      <div class="kpi"><div class="label">% utilisé</div><div id="kpiUsed" class="value">–</div></div>
     </div>
 
     <div class="hr"></div>
 
-    <div class="grid grid-cols-2">
-      <!-- Formulaire Budget -->
-      <div class="card">
-        <h2>Budget annuel par service</h2>
-        <div class="row">
-          <div style="flex:1">
-            <label for="serviceBudget">Service</label>
-            <select id="serviceBudget"></select>
-          </div>
-          <div style="width:220px;max-width:100%">
-            <label for="budgetAmount">Budget annuel (€)</label>
-            <input id="budgetAmount" type="number" min="0" step="0.01" placeholder="Ex. 10000" />
-          </div>
-        </div>
-        <div class="row" style="margin-top:8px">
-          <button id="saveBudgetBtn">Enregistrer le budget</button>
-        </div>
-      </div>
-
-      <!-- Formulaire Dépenses -->
-      <div class="card">
-        <h2>Saisie des dépenses</h2>
-        <div class="row">
-          <div style="flex:1">
-            <label for="serviceExpense">Service</label>
-            <select id="serviceExpense"></select>
-          </div>
-          <div style="width:180px;max-width:100%">
-            <label for="expenseAmount">Montant (€)</label>
-            <input id="expenseAmount" type="number" min="0" step="0.01" placeholder="Ex. 500" />
-          </div>
-          <div style="width:180px;max-width:100%">
-            <label for="expenseDate">Date</label>
-            <input id="expenseDate" type="date" />
-          </div>
-        </div>
-        <div class="row" style="margin-top:8px">
-          <button id="addExpenseBtn">Ajouter la dépense</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Suivi par service -->
-    <div class="card" style="margin-top:16px">
-      <h2>Suivi par service</h2>
+    <div class="card">
+      <h2>Services</h2>
       <table>
         <thead>
           <tr>
             <th>Service</th>
-            <th>Budget alloué</th>
+            <th>Budget cumulé</th>
             <th>Dépenses cumulées</th>
             <th>Reste</th>
             <th>Avancement</th>
             <th>Statut</th>
+            <th>Action</th>
           </tr>
         </thead>
-        <tbody id="summaryTbody"></tbody>
+        <tbody id="servicesTbody"></tbody>
       </table>
     </div>
 
     <div class="card" style="margin-top:16px">
       <h2>Export / Import</h2>
       <div class="row">
-        <button id="exportBtn" class="ghost">Exporter (JSON)</button>
+        <button id="exportBtn">Exporter (JSON)</button>
         <input id="importFile" type="file" accept="application/json" style="display:none" />
-        <button id="importBtn" class="ghost">Importer (JSON)</button>
-        <button id="resetBtn" class="danger">Réinitialiser toutes les données</button>
+        <button id="importBtn">Importer (JSON)</button>
         <div class="spacer"></div>
-        <span class="hint">Les données sont stockées localement (localStorage).</span>
+        <span class="hint">Stockage local (localStorage) multi-exercices et multi-services/projets.</span>
       </div>
-    </div>
-
-    <div class="footer">
-      <div>Services : Marketing • RH • DSI • Production • Logistique</div>
-      <div>Statuts : ≤ 90 % ✅ OK · 90–100 % ⚠️ À surveiller · &gt; 100 % ❌ Dépassement.</div>
     </div>
   </div>
 
+  <!-- Drawer détail -->
+  <div id="overlay" class="overlay" aria-hidden="true"></div>
+  <aside id="sheet" class="sheet" aria-labelledby="sheetTitle" role="dialog" aria-modal="true">
+    <div class="sheet-head">
+      <div class="pill" id="sheetServicePill">Service</div>
+      <div class="sheet-title" id="sheetTitle">Détail projets</div>
+      <div class="spacer"></div>
+      <button id="closeSheet" class="close-btn" aria-label="Fermer">✕</button>
+    </div>
+    <div class="sheet-body">
+      <div class="search">
+        <input id="searchInput" placeholder="Rechercher un projet… (nom contient)"/>
+        <button id="clearSearch" class="ghost">Effacer</button>
+      </div>
+      <div class="kpis-row">
+        <div class="mini-kpi"><div class="label">Budget (service)</div><div class="value" id="svcKpiBudget">–</div></div>
+        <div class="mini-kpi"><div class="label">Dépenses (service)</div><div class="value" id="svcKpiSpent">–</div></div>
+        <div class="mini-kpi"><div class="label">Reste</div><div class="value" id="svcKpiLeft">–</div></div>
+        <div class="mini-kpi"><div class="label">% utilisé</div><div class="value" id="svcKpiUsed">–</div></div>
+      </div>
+
+      <table class="mini-table">
+        <thead>
+          <tr>
+            <th style="width:35%">Projet</th>
+            <th>Budget</th>
+            <th>Dépenses</th>
+            <th>Reste</th>
+            <th>Avancement</th>
+            <th>Statut</th>
+          </tr>
+        </thead>
+        <tbody id="detailTbody"></tbody>
+      </table>
+    </div>
+    <div class="sheet-foot">
+      <button id="closeSheet2" class="ghost">Fermer</button>
+    </div>
+  </aside>
+
   <script>
   (function(){
-    // --- Constantes ---
+    // --- Constantes & Services ---
     const SERVICES = ["Marketing","RH","DSI","Production","Logistique"];
     const LS_PREFIX = "bt-state-";
     const ADD_YEAR_VALUE = "__add__";
 
-    // DOM
+    // --- DOM (liste) ---
     const yearSelect = document.getElementById('yearSelect');
-
-    const serviceBudget = document.getElementById('serviceBudget');
-    const budgetAmount = document.getElementById('budgetAmount');
-    const saveBudgetBtn = document.getElementById('saveBudgetBtn');
-
-    const serviceExpense = document.getElementById('serviceExpense');
-    const expenseAmount = document.getElementById('expenseAmount');
-    const expenseDate = document.getElementById('expenseDate');
-    const addExpenseBtn = document.getElementById('addExpenseBtn');
-
-    const summaryTbody = document.getElementById('summaryTbody');
-
+    const servicesTbody = document.getElementById('servicesTbody');
     const kpiBudget = document.getElementById('kpiBudget');
     const kpiSpent = document.getElementById('kpiSpent');
     const kpiLeft = document.getElementById('kpiLeft');
     const kpiUsed = document.getElementById('kpiUsed');
-
     const exportBtn = document.getElementById('exportBtn');
     const importBtn = document.getElementById('importBtn');
     const importFile = document.getElementById('importFile');
-    const resetBtn = document.getElementById('resetBtn');
 
-    // Utils
+    // --- DOM (drawer) ---
+    const overlay = document.getElementById('overlay');
+    const sheet = document.getElementById('sheet');
+    const closeSheet = document.getElementById('closeSheet');
+    const closeSheet2 = document.getElementById('closeSheet2');
+    const sheetServicePill = document.getElementById('sheetServicePill');
+    const sheetTitle = document.getElementById('sheetTitle');
+    const detailTbody = document.getElementById('detailTbody');
+    const svcKpiBudget = document.getElementById('svcKpiBudget');
+    const svcKpiSpent = document.getElementById('svcKpiSpent');
+    const svcKpiLeft = document.getElementById('svcKpiLeft');
+    const svcKpiUsed = document.getElementById('svcKpiUsed');
+    const searchInput = document.getElementById('searchInput');
+    const clearSearch = document.getElementById('clearSearch');
+
+    // --- Utils ---
     const fmtEUR = new Intl.NumberFormat('fr-FR', { style:'currency', currency:'EUR' });
-    const todayISO = () => new Date().toISOString().slice(0,10);
-    const parseYear = y => Number(String(y).slice(0,4));
-
     function getKey(year){ return LS_PREFIX + String(year); }
+    function uuid(){ return crypto.randomUUID ? crypto.randomUUID() : ('p-'+Date.now()+Math.random()); }
+
+    // --- State helpers (services -> projects) ---
+    function emptyState(year){
+      const services = {};
+      SERVICES.forEach(s => services[s] = { projects: [] });
+      return { year, services };
+    }
+    function ensureSchema(state){
+      if(!state.services){
+        const services = {};
+        SERVICES.forEach(s => services[s] = { projects: [] });
+        if(state.budgets){
+          Object.keys(state.budgets).forEach(s=>{
+            if(!services[s]) services[s] = { projects: [] };
+            const b = Number(state.budgets[s]||0);
+            if(b>0){
+              services[s].projects.push({
+                id: uuid(),
+                name: "Budget Service",
+                budget: b,
+                expenses: (state.expenses||[])
+                  .filter(e=>e.service===s)
+                  .map(e=>({amount:Number(e.amount||0), date:e.date, note:''}))
+              });
+            }
+          });
+        }
+        state = { year: state.year, services };
+      }
+      SERVICES.forEach(s=>{
+        if(!state.services[s]) state.services[s] = { projects: [] };
+        state.services[s].projects = state.services[s].projects || [];
+        state.services[s].projects.forEach(p=>{
+          p.expenses = Array.isArray(p.expenses) ? p.expenses : [];
+        });
+      });
+      return state;
+    }
 
     function loadYears(){
-      const years = [];
+      const years=[];
       for(let i=0;i<localStorage.length;i++){
-        const key = localStorage.key(i);
-        if(key && key.startsWith(LS_PREFIX)){
-          const y = parseInt(key.replace(LS_PREFIX,''),10);
+        const k=localStorage.key(i);
+        if(k && k.startsWith(LS_PREFIX)){
+          const y=parseInt(k.replace(LS_PREFIX,''),10);
           if(!Number.isNaN(y)) years.push(y);
         }
       }
-      if(years.length===0){ years.push(new Date().getFullYear()); }
+      if(years.length===0) years.push(new Date().getFullYear());
       years.sort((a,b)=>a-b);
       return years;
     }
-
-    function defaultState(year){
-      return { year, budgets: {}, expenses: [] };
-    }
-
-    function loadState(year){
+    function getState(year){
       const raw = localStorage.getItem(getKey(year));
       if(!raw){
-        const st = defaultState(year);
+        const st = emptyState(year);
         localStorage.setItem(getKey(year), JSON.stringify(st));
         return st;
       }
-      try{ return JSON.parse(raw); } catch(e){
-        const st = defaultState(year);
+      try{ return ensureSchema(JSON.parse(raw)); }
+      catch(e){
+        const st=emptyState(year);
         localStorage.setItem(getKey(year), JSON.stringify(st));
         return st;
       }
     }
-
-    function saveState(state){
-      localStorage.setItem(getKey(state.year), JSON.stringify(state));
-    }
+    function saveState(state){ localStorage.setItem(getKey(state.year), JSON.stringify(state)); }
 
     function setYearOptions(selected){
       const years = loadYears();
-      yearSelect.innerHTML = '';
+      yearSelect.innerHTML='';
       years.forEach(y=>{
-        const opt = document.createElement('option');
-        opt.value = y; opt.textContent = y;
-        if(String(y)===String(selected)) opt.selected = true;
+        const opt=document.createElement('option');
+        opt.value=y; opt.textContent=y;
+        if(String(y)===String(selected)) opt.selected=true;
         yearSelect.appendChild(opt);
       });
-      // Option "Ajouter un exercice…"
-      const optAdd = document.createElement('option');
-      optAdd.value = ADD_YEAR_VALUE;
-      optAdd.textContent = "➕ Ajouter un exercice…";
+      const optAdd=document.createElement('option');
+      optAdd.value=ADD_YEAR_VALUE;
+      optAdd.textContent="➕ Ajouter un exercice…";
       yearSelect.appendChild(optAdd);
     }
 
-    // Agrégations
-    function sumExpensesFor(state, service){
-      return state.expenses
-        .filter(e=> e.service===service && parseYear(e.date)===state.year)
-        .reduce((a,b)=> a + Number(b.amount||0), 0);
+    // --- Aggregations ---
+    function serviceTotals(state, service){
+      const svc = state.services[service] || {projects:[]};
+      const budget = svc.projects.reduce((a,p)=>a+Number(p.budget||0),0);
+      const spent = svc.projects.reduce((a,p)=> a + (p.expenses||[]).reduce((x,e)=>x+Number(e.amount||0),0),0);
+      return { budget, spent, left: budget - spent };
     }
-    function totalBudget(state){
-      return Object.values(state.budgets).reduce((a,b)=> a + Number(b||0), 0);
+    function totalsAll(state){
+      return SERVICES.reduce((acc,s)=>{
+        const t = serviceTotals(state,s);
+        acc.budget += t.budget;
+        acc.spent += t.spent;
+        return acc;
+      }, {budget:0, spent:0});
     }
-    function totalExpenses(state){
-      return SERVICES.reduce((acc,s)=> acc + sumExpensesFor(state,s), 0);
+    function statusFor(pct){
+      if(pct<=90) return {cls:'ok', txt:'✅ OK'};
+      if(pct<=100) return {cls:'watch', txt:'⚠️ À surveiller'};
+      return {cls:'over', txt:'❌ Dépassement'};
+    }
+    function projectTotals(p){
+      const spent = (p.expenses||[]).reduce((a,e)=> a + Number(e.amount||0), 0);
+      const left  = Number(p.budget||0) - spent;
+      const pct   = p.budget>0 ? (spent/p.budget)*100 : (spent>0?999:0);
+      return {spent,left,pct};
     }
 
-    function statusFor(percent){
-      if(percent <= 90) return { cls:'ok', label:'✅ OK' };
-      if(percent <= 100) return { cls:'watch', label:'⚠️ À surveiller' };
-      return { cls:'over', label:'❌ Dépassement' };
-    }
+    // --- Liste principale ---
+    function render(year){
+      const state = getState(year);
+      const {budget:tb, spent:te} = totalsAll(state);
+      const left = tb - te;
+      const used = tb>0 ? (te/tb)*100 : (te>0?999:0);
 
-    // Rendu
-    function renderSummary(state){
-      summaryTbody.innerHTML = '';
+      kpiBudget.textContent = fmtEUR.format(tb);
+      kpiSpent.textContent = fmtEUR.format(te);
+      kpiLeft.textContent = fmtEUR.format(left);
+      kpiUsed.textContent = used===999?'>100%':used.toFixed(1)+' %';
+
+      servicesTbody.innerHTML='';
       SERVICES.forEach(s=>{
-        const budget = Number(state.budgets[s]||0);
-        const spent = sumExpensesFor(state, s);
-        const left = budget - spent;
-        const pct = budget > 0 ? (spent / budget) * 100 : (spent>0 ? 999 : 0);
-        const pctClamped = Math.min(pct, 100);
+        const t = serviceTotals(state,s);
+        const pct = t.budget>0 ? (t.spent/t.budget)*100 : (t.spent>0?999:0);
+        const pctClamped = Math.min(pct,100);
         const st = statusFor(pct);
-        const tr = document.createElement('tr');
+
+        const tr=document.createElement('tr');
         tr.innerHTML = `
           <td>${s}</td>
-          <td>${budget?fmtEUR.format(budget):'<span class="hint">—</span>'}</td>
+          <td>${t.budget?fmtEUR.format(t.budget):'<span class="hint">—</span>'}</td>
+          <td>${fmtEUR.format(t.spent)}</td>
+          <td style="color:${t.left<0?'#991b1b':'inherit'}">${fmtEUR.format(t.left)}</td>
+          <td style="min-width:160px">
+            <div class="progress"><span style="width:${pctClamped.toFixed(1)}%"></span></div>
+            <div class="hint">${pct===999?'>100%':pct.toFixed(1)+' %'}</div>
+          </td>
+          <td><span class="badge ${st.cls}">${st.txt}</span></td>
+          <td><button class="open-detail" data-service="${s}">Voir détail</button></td>
+        `;
+        servicesTbody.appendChild(tr);
+      });
+    }
+
+    // --- Drawer: rendu détail ---
+    function buildDetail(state, service){
+      const svc = state.services[service] || {projects:[]};
+      // KPIs service
+      const t = serviceTotals(state, service);
+      const used = t.budget>0 ? (t.spent/t.budget)*100 : (t.spent>0?999:0);
+      svcKpiBudget.textContent = t.budget ? fmtEUR.format(t.budget) : '—';
+      svcKpiSpent.textContent  = fmtEUR.format(t.spent);
+      svcKpiLeft.textContent   = fmtEUR.format(t.left);
+      svcKpiUsed.textContent   = used===999?'>100%':used.toFixed(1)+' %';
+
+      // Table projets
+      const q = (searchInput.value||'').trim().toLowerCase();
+      const list = (svc.projects||[])
+        .filter(p => !q || (p.name||'').toLowerCase().includes(q));
+
+      detailTbody.innerHTML = '';
+      if(list.length===0){
+        detailTbody.innerHTML = `<tr><td colspan="6" class="hint">Aucun projet${q?' pour votre recherche':''}.</td></tr>`;
+        return;
+      }
+      list.forEach(p=>{
+        const {spent,left,pct} = projectTotals(p);
+        const pctClamped = Math.min(pct,100);
+        const st = statusFor(pct);
+        const tr=document.createElement('tr');
+        tr.innerHTML = `
+          <td>${p.name}</td>
+          <td>${p.budget?fmtEUR.format(p.budget):'<span class="hint">—</span>'}</td>
           <td>${fmtEUR.format(spent)}</td>
           <td style="color:${left<0?'#991b1b':'inherit'}">${fmtEUR.format(left)}</td>
           <td style="min-width:160px">
             <div class="progress"><span style="width:${pctClamped.toFixed(1)}%"></span></div>
             <div class="hint">${pct===999?'>100%':pct.toFixed(1)+' %'}</div>
           </td>
-          <td><span class="badge ${st.cls}">${st.label}</span></td>
+          <td><span class="badge ${st.cls}">${st.txt}</span></td>
         `;
-        summaryTbody.appendChild(tr);
+        detailTbody.appendChild(tr);
       });
     }
 
-    function renderKPIs(state){
-      const tb = totalBudget(state);
-      const te = totalExpenses(state);
-      const left = tb - te;
-      const used = tb>0 ? (te/tb)*100 : (te>0?999:0);
-      kpiBudget.textContent = fmtEUR.format(tb);
-      kpiSpent.textContent = fmtEUR.format(te);
-      kpiLeft.textContent = fmtEUR.format(left);
-      kpiUsed.textContent = used===999?'>100%':used.toFixed(1)+' %';
-    }
+    // --- Ouvrir / fermer le drawer ---
+    let currentService = null;
 
-    function rerender(year){
-      const state = loadState(year);
-      renderSummary(state);
-      renderKPIs(state);
-      if(!expenseDate.value) expenseDate.value = todayISO();
-    }
-
-    function populateServiceSelects(){
-      [serviceBudget, serviceExpense].forEach(sel=>{
-        sel.innerHTML='';
-        SERVICES.forEach(s=>{
-          const opt=document.createElement('option');
-          opt.value=s; opt.textContent=s; sel.appendChild(opt);
-        });
-      });
-    }
-
-    // Actions
-    saveBudgetBtn.addEventListener('click', ()=>{
+    function openDrawer(service){
+      currentService = service;
       const year = Number(yearSelect.value);
-      const state = loadState(year);
-      const srv = serviceBudget.value;
-      const amt = Number(budgetAmount.value);
-      if(!srv){ alert('Choisissez un service'); return; }
-      if(!(amt>=0)){ alert('Montant invalide'); return; }
-      state.budgets[srv] = amt; // un budget max par service
-      saveState(state);
-      rerender(year);
-      budgetAmount.value='';
-    });
+      const state = getState(year);
 
-    addExpenseBtn.addEventListener('click', ()=>{
-      const year = Number(yearSelect.value);
-      const state = loadState(year);
-      const srv = serviceExpense.value;
-      const amt = Number(expenseAmount.value);
-      const dt = expenseDate.value || todayISO();
-      if(!srv){ alert('Choisissez un service'); return; }
-      if(!(amt>0)){ alert('Saisissez un montant > 0'); return; }
-      if(!/\d{4}-\d{2}-\d{2}/.test(dt)){ alert('Date invalide'); return; }
-      state.expenses.push({ service:srv, amount:amt, date:dt });
-      saveState(state);
-      rerender(year);
-      expenseAmount.value='';
-    });
+      sheetServicePill.textContent = service;
+      sheetTitle.textContent = `Détail projets – ${service}`;
+      searchInput.value = '';
+      buildDetail(state, service);
 
-    // Sélection/ajout d'exercice
-    yearSelect.addEventListener('change', ()=>{
-      if(yearSelect.value === ADD_YEAR_VALUE){
-        const y = prompt("Nouvel exercice (YYYY) :", String(new Date().getFullYear()+1));
-        if(!y){ setYearOptions(loadYears().slice(-1)[0]); rerender(Number(yearSelect.value)); return; }
-        const nY = parseInt(y,10);
-        if(!nY || nY<2000 || nY>9999){ alert("Année invalide."); setYearOptions(loadYears().slice(-1)[0]); rerender(Number(yearSelect.value)); return; }
-        if(!localStorage.getItem(getKey(nY))){
-          localStorage.setItem(getKey(nY), JSON.stringify(defaultState(nY)));
-        }
-        setYearOptions(nY);
-        rerender(nY);
-      } else {
-        rerender(Number(yearSelect.value));
+      overlay.classList.add('open');
+      overlay.setAttribute('aria-hidden','false');
+      sheet.focus?.();
+      document.body.style.overflow='hidden';
+    }
+    function closeDrawer(){
+      overlay.classList.remove('open');
+      overlay.setAttribute('aria-hidden','true');
+      document.body.style.overflow='';
+      currentService = null;
+    }
+
+    servicesTbody.addEventListener('click', (e)=>{
+      const t = e.target;
+      if(!(t instanceof HTMLElement)) return;
+      if(t.classList.contains('open-detail') && t.dataset.service){
+        openDrawer(t.dataset.service);
       }
     });
+    overlay.addEventListener('click', closeDrawer);
+    closeSheet.addEventListener('click', closeDrawer);
+    closeSheet2.addEventListener('click', closeDrawer);
+    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeDrawer(); });
 
-    // Export : inclut tous les exercices
+    // Recherche dans le drawer
+    searchInput.addEventListener('input', ()=>{
+      if(!currentService) return;
+      const year = Number(yearSelect.value);
+      const state = getState(year);
+      buildDetail(state, currentService);
+    });
+    clearSearch.addEventListener('click', ()=>{
+      searchInput.value=''; searchInput.dispatchEvent(new Event('input'));
+    });
+
+    // Export / Import (toutes années)
     function collectAll(){
       const out = { years:{} };
-      loadYears().forEach(y=>{ out.years[y] = loadState(y); });
+      loadYears().forEach(y=> out.years[y]=getState(y));
       return out;
     }
-
     exportBtn.addEventListener('click', ()=>{
       const data = collectAll();
       const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      const ts = new Date().toISOString().replace(/[:.]/g,'-');
-      a.download = `budgets-export-${ts}.json`;
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(blob);
+      const ts=new Date().toISOString().replace(/[:.]/g,'-');
+      a.download=`budgets-multi-${ts}.json`;
       document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+      setTimeout(()=>URL.revokeObjectURL(a.href),1500);
     });
-
-    importBtn.addEventListener('click', ()=> importFile.click());
+    importBtn.addEventListener('click', ()=>importFile.click());
     importFile.addEventListener('change', ()=>{
       const f = importFile.files && importFile.files[0];
       if(!f) return;
-      const reader = new FileReader();
-      reader.onload = ()=>{
+      const reader=new FileReader();
+      reader.onload=()=>{
         try{
           const json = JSON.parse(String(reader.result||'{}'));
-          if(json && json.years && typeof json.years === 'object'){
+          if(json && json.years){
             Object.keys(json.years).forEach(y=>{
               const st = json.years[y];
-              if(st && st.year){ localStorage.setItem(getKey(st.year), JSON.stringify(st)); }
-              else { localStorage.setItem(getKey(y), JSON.stringify({ ...(st||{}), year:Number(y) })); }
+              localStorage.setItem(getKey(st.year||y), JSON.stringify(st));
             });
-          } else if(json && json.year){
+          }else if(json && json.year){
             localStorage.setItem(getKey(json.year), JSON.stringify(json));
-          } else {
-            alert('Fichier JSON non reconnu.');
-            return;
+          }else{
+            alert('Fichier JSON non reconnu.'); return;
           }
           setYearOptions(Number(yearSelect.value));
-          rerender(Number(yearSelect.value));
+          render(Number(yearSelect.value));
+          // rafraîchir le drawer s’il est ouvert
+          if(currentService){
+            const state = getState(Number(yearSelect.value));
+            buildDetail(state, currentService);
+          }
           alert('Import terminé.');
-        }catch(err){
-          console.error(err);
-          alert('Impossible de lire le JSON.');
-        }
+        }catch(e){ console.error(e); alert('Impossible de lire le JSON.'); }
         importFile.value='';
       };
       reader.readAsText(f);
     });
 
-    resetBtn.addEventListener('click', ()=>{
-      if(!confirm('Tout supprimer (tous les exercices) ?')) return;
-      const keys=[];
-      for(let i=0;i<localStorage.length;i++){
-        const k=localStorage.key(i); if(k&&k.startsWith(LS_PREFIX)) keys.push(k);
-      }
-      keys.forEach(k=>localStorage.removeItem(k));
-      const y = new Date().getFullYear();
-      localStorage.setItem(getKey(y), JSON.stringify(defaultState(y)));
-      setYearOptions(y);
-      rerender(y);
-    });
-
-    // Init
-    function init(){
-      // services
-      [serviceBudget, serviceExpense].forEach(sel=>{
-        sel.innerHTML='';
-        SERVICES.forEach(s=>{
-          const opt=document.createElement('option');
-          opt.value=s; opt.textContent=s; sel.appendChild(opt);
-        });
-      });
+    // --- Init ---
+    (function init(){
       const years = loadYears();
       const current = years.includes(new Date().getFullYear()) ? new Date().getFullYear() : years[years.length-1];
       setYearOptions(current);
-      rerender(current);
-      if(!expenseDate.value) expenseDate.value = todayISO();
-    }
-
-    init();
+      render(current);
+    })();
   })();
   </script>
 </body>
