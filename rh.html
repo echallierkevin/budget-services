@@ -56,6 +56,12 @@
     .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
     .toolbar .spacer{flex:1}
     .pill{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border);padding:6px 10px;border-radius:999px;background:#fff;color:#0f172a;font-weight:700}
+
+    /* zone Export/Import compacte */
+    .tools-compact{padding:10px;border-radius:12px}
+    .tools-compact h2{font-size:.95rem;color:var(--muted);margin-bottom:8px}
+    .btn-tiny{padding:6px 10px;font-size:.85rem;border-radius:8px}
+    .text-muted{font-size:.85rem;color:var(--muted)}
   </style>
 </head>
 <body>
@@ -146,7 +152,7 @@
       <div class="hint">Astuce : ✏️ charge un projet dans le formulaire, 🗑️ supprime le projet.</div>
     </div>
 
-    <!-- NOUVEAU : Historique des dépenses -->
+    <!-- Historique des dépenses -->
     <div class="card" style="margin-top:16px">
       <div class="row">
         <h2>Historique des dépenses (<span id="histYear">—</span>)</h2>
@@ -163,7 +169,7 @@
           <option value="amount_desc">Tri : Montant ↓</option>
           <option value="amount_asc">Tri : Montant ↑</option>
         </select>
-        <button id="histClear" class="ghost">Effacer</button>
+        <!-- Bouton Effacer supprimé -->
       </div>
       <table>
         <thead>
@@ -178,14 +184,15 @@
       </table>
     </div>
 
-    <div class="card" style="margin-top:16px">
+    <!-- Export / Import compact -->
+    <div class="card tools-compact" style="margin-top:16px">
       <h2>Export / Import</h2>
-      <div class="row">
-        <button id="exportBtn">Exporter (JSON)</button>
+      <div class="row" style="gap:6px">
+        <button id="exportBtn" class="btn-tiny">Exporter (JSON)</button>
         <input id="importFile" type="file" accept="application/json" style="display:none" />
-        <button id="importBtn">Importer (JSON)</button>
+        <button id="importBtn" class="btn-tiny ghost">Importer</button>
         <div class="spacer"></div>
-        <span class="hint">Sauvegarde/restaure l’état complet (tous services et exercices).</span>
+        <span class="text-muted">Sauvegarde/restaure l’état complet (tous services & exercices).</span>
       </div>
     </div>
   </div>
@@ -193,7 +200,7 @@
   <script>
   (function(){
     // === CONFIG SERVICE ===
-    const SERVICE_NAME = "RH"; // garder "RH" pour ce fichier
+    const SERVICE_NAME = "RH";
 
     // --- Constantes & DOM ---
     const SERVICES = ["Marketing","RH","RH","Production","Logistique"];
@@ -227,7 +234,6 @@
     const histService = document.getElementById('histService');
     const histSearch = document.getElementById('histSearch');
     const histSort = document.getElementById('histSort');
-    const histClear = document.getElementById('histClear');
     const histTbody = document.getElementById('histTbody');
 
     // Export/Import
@@ -395,8 +401,8 @@
               projectId: p.id,
               projectName: p.name,
               amount: Number(e.amount||0),
-              date: e.date, // date de dépense (YYYY-MM-DD)
-              createdAt: e.createdAt || e.date, // fallback si ancien enregistrement
+              date: e.date,
+              createdAt: e.createdAt || e.date,
             });
           }
         });
@@ -425,7 +431,7 @@
       list = sortExpenses(list, histSort.value);
       histTbody.innerHTML = '';
       if(list.length===0){
-        histTbody.innerHTML = `<tr><td colspan="5" class="hint">Aucune dépense${q?' pour votre recherche':''}.</td></tr>`;
+        histTbody.innerHTML = `<tr><td colspan="4" class="hint">Aucune dépense${q?' pour votre recherche':''}.</td></tr>`;
         return;
       }
       list.forEach(x=>{
@@ -506,12 +512,11 @@
       const p = (svc.projects||[]).find(x=>x.id===pid);
       if(!p){ alert('Projet introuvable'); return; }
 
-      // NOUVEAU : on stocke createdAt pour tracer quand l’ajout a été fait
       p.expenses.push({ amount: amt, date: dt, createdAt: new Date().toISOString() });
       saveState(state);
 
       expenseAmount.value='';
-      render(year); // rafraîchit projets + historique
+      render(year);
     });
 
     // --- Year select ---
@@ -556,11 +561,49 @@
       const st = loadState(y);
       renderHistory(st, y);
     });
-    histClear.addEventListener('click', ()=>{
-      histSearch.value=''; histSort.value='createdAt_desc';
-      const y = Number(yearSelect.value);
-      const st = loadState(y);
-      renderHistory(st, y);
+    // (Bouton Effacer supprimé)
+
+    // --- Export / Import ---
+    exportBtn.addEventListener('click', ()=>{
+      const data = (function collectAll(){
+        const out = { years:{} };
+        const ys = loadYears();
+        ys.forEach(y=> out.years[y]=loadState(y));
+        return out;
+      })();
+      const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(blob);
+      const ts=new Date().toISOString().replace(/[:.]/g,'-');
+      a.download=`budgets-multi-${ts}.json`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+    });
+    importBtn.addEventListener('click', ()=> importFile.click());
+    importFile.addEventListener('change', ()=>{
+      const f = importFile.files && importFile.files[0];
+      if(!f) return;
+      const reader=new FileReader();
+      reader.onload=()=>{
+        try{
+          const json = JSON.parse(String(reader.result||'{}'));
+          if(json && json.years){
+            Object.keys(json.years).forEach(y=>{
+              const st = json.years[y];
+              localStorage.setItem(getKey(st.year||y), JSON.stringify(st));
+            });
+          }else if(json && json.year){
+            localStorage.setItem(getKey(json.year), JSON.stringify(json));
+          }else{
+            alert('Fichier JSON non reconnu.'); return;
+          }
+          setYearOptions(Number(yearSelect.value));
+          render(Number(yearSelect.value));
+          alert('Import terminé.');
+        }catch(e){ console.error(e); alert('Impossible de lire le JSON.'); }
+        importFile.value='';
+      };
+      reader.readAsText(f);
     });
 
     // --- Init ---
