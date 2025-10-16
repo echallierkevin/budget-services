@@ -14,6 +14,8 @@
       --danger:#ef4444;
       --border:#e5e7eb;
       --progress-bg:#f3f4f6;
+      --ok:#16a34a;
+      --warn:#f59e0b;
     }
     *{box-sizing:border-box}
     body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Helvetica,Arial,sans-serif}
@@ -30,12 +32,14 @@
     label{display:block;margin:0 0 6px;color:var(--muted)}
     input,select,button{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#fff;color:var(--text)}
     input[type="date"]{padding:8px 10px}
+    input:invalid{outline:2px solid rgba(239,68,68,.2)}
     button{cursor:pointer;font-weight:700;border:1px solid transparent;background:var(--accent);color:#3b2c00}
+    button:disabled{opacity:.6;cursor:not-allowed}
     button.ghost{background:#fff;border-color:var(--border)}
     button.danger{background:var(--danger);color:#fff}
     table{width:100%;border-collapse:collapse}
     th,td{padding:10px;border-bottom:1px solid var(--border);text-align:left}
-    th{color:var(--muted)}
+    th{color:var(--muted);background:#fff;position:sticky;top:0;z-index:1}
     .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
     @media (max-width:720px){.kpis{grid-template-columns:1fr 1fr}}
     .kpi{background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px}
@@ -52,16 +56,25 @@
     .brand{display:flex;align-items:center;gap:12px}
     .brand img{height:40px;border-radius:6px}
     .brand-name{font-weight:800;color:#0f172a}
-    /* historique */
+
+    /* Historique */
     .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
     .toolbar .spacer{flex:1}
     .pill{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border);padding:6px 10px;border-radius:999px;background:#fff;color:#0f172a;font-weight:700}
+    .summary{display:flex;justify-content:flex-end;color:var(--muted);font-size:.9rem;margin-top:8px}
 
-    /* zone Export/Import compacte */
+    /* Export/Import compact */
     .tools-compact{padding:10px;border-radius:12px}
     .tools-compact h2{font-size:.95rem;color:var(--muted);margin-bottom:8px}
     .btn-tiny{padding:6px 10px;font-size:.85rem;border-radius:8px}
     .text-muted{font-size:.85rem;color:var(--muted)}
+
+    /* Toast */
+    .toast{position:fixed;right:16px;bottom:16px;background:#fff;border:1px solid var(--border);box-shadow:0 10px 30px rgba(0,0,0,.08);
+      padding:10px 12px;border-radius:12px;display:none;gap:10px;align-items:center;z-index:60}
+    .toast.show{display:flex;animation:fadein .15s ease}
+    .toast .dot{width:10px;height:10px;border-radius:999px;background:var(--ok)}
+    @keyframes fadein{from{opacity:.5;transform:translateY(6px)} to{opacity:1;transform:none}}
   </style>
 </head>
 <body>
@@ -98,11 +111,11 @@
         <div class="row">
           <div style="flex:1">
             <label for="projectName">Nom du projet</label>
-            <input id="projectName" placeholder="Ex. ERP, Modernisation poste, ..."/>
+            <input id="projectName" placeholder="Ex. ERP, Modernisation poste, ..." required />
           </div>
           <div style="width:220px;max-width:100%">
             <label for="projectBudget">Budget (€)</label>
-            <input id="projectBudget" type="number" min="0" step="0.01" placeholder="Ex. 12000"/>
+            <input id="projectBudget" type="number" min="0" step="0.01" placeholder="Ex. 12000" required />
           </div>
         </div>
         <div class="row" style="margin-top:8px">
@@ -116,19 +129,20 @@
         <div class="row">
           <div style="flex:1">
             <label for="expenseProject">Projet</label>
-            <select id="expenseProject"></select>
+            <select id="expenseProject" required></select>
           </div>
           <div style="width:180px;max-width:100%">
             <label for="expenseAmount">Montant (€)</label>
-            <input id="expenseAmount" type="number" min="0" step="0.01" placeholder="Ex. 500"/>
+            <input id="expenseAmount" type="number" min="0.01" step="0.01" placeholder="Ex. 500" required />
           </div>
           <div style="width:180px;max-width:100%">
             <label for="expenseDate">Date</label>
-            <input id="expenseDate" type="date"/>
+            <input id="expenseDate" type="date" required />
           </div>
         </div>
         <div class="row" style="margin-top:8px">
-          <button id="addExpenseBtn">Ajouter la dépense</button>
+          <button id="addExpenseBtn" disabled>Ajouter la dépense</button>
+          <span class="hint">Astuce : appuyez sur Entrée dans “Montant” pour valider.</span>
         </div>
       </div>
     </div>
@@ -161,27 +175,29 @@
       </div>
       <div class="toolbar">
         <input id="histSearch" placeholder="Rechercher (projet)..." style="flex:1; min-width:240px" />
+        <select id="histRange" style="width:auto">
+          <option value="30">Derniers 30 jours</option>
+          <option value="90">Derniers 90 jours</option>
+          <option value="all" selected>Toute l'année</option>
+        </select>
         <select id="histSort" style="width:auto">
           <option value="createdAt_desc">Tri : Ajouté le ↓</option>
           <option value="createdAt_asc">Tri : Ajouté le ↑</option>
-          <option value="date_desc">Tri : Date dépense ↓</option>
-          <option value="date_asc">Tri : Date dépense ↑</option>
           <option value="amount_desc">Tri : Montant ↓</option>
           <option value="amount_asc">Tri : Montant ↑</option>
         </select>
-        <!-- Bouton Effacer supprimé -->
       </div>
       <table>
         <thead>
           <tr>
             <th>Projet</th>
             <th>Montant</th>
-            <th>Date dépense</th>
             <th>Ajouté le</th>
           </tr>
         </thead>
         <tbody id="histTbody"></tbody>
       </table>
+      <div id="histSummary" class="summary">—</div>
     </div>
 
     <!-- Export / Import compact -->
@@ -195,6 +211,11 @@
         <span class="text-muted">Sauvegarde/restaure l’état complet (tous services & exercices).</span>
       </div>
     </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast" role="status" aria-live="polite">
+    <span class="dot"></span><span id="toastMsg">Action effectuée.</span>
   </div>
 
   <script>
@@ -233,13 +254,26 @@
     const histYear = document.getElementById('histYear');
     const histService = document.getElementById('histService');
     const histSearch = document.getElementById('histSearch');
+    const histRange = document.getElementById('histRange');
     const histSort = document.getElementById('histSort');
     const histTbody = document.getElementById('histTbody');
+    const histSummary = document.getElementById('histSummary');
 
     // Export/Import
     const exportBtn = document.getElementById('exportBtn');
     const importBtn = document.getElementById('importBtn');
     const importFile = document.getElementById('importFile');
+
+    // Toast
+    const toast = document.getElementById('toast');
+    const toastMsg = document.getElementById('toastMsg');
+    let toastTimer = null;
+    function showToast(msg){
+      toastMsg.textContent = msg || 'Action effectuée.';
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(()=> toast.classList.remove('show'), 1800);
+    }
 
     // --- Utils ---
     const fmtEUR = new Intl.NumberFormat('fr-FR', { style:'currency', currency:'EUR' });
@@ -372,8 +406,8 @@
           </td>
           <td><span class="badge ${st.cls}">${st.txt}</span></td>
           <td>
-            <button class="ghost" data-edit="${p.id}">✏️</button>
-            <button class="ghost" data-del="${p.id}">🗑️</button>
+            <button class="ghost" data-edit="${p.id}" title="Modifier">✏️</button>
+            <button class="ghost" data-del="${p.id}" title="Supprimer">🗑️</button>
           </td>
         `;
         projectsTbody.appendChild(tr);
@@ -401,7 +435,7 @@
               projectId: p.id,
               projectName: p.name,
               amount: Number(e.amount||0),
-              date: e.date,
+              date: e.date,                   // conservé en data mais plus affiché
               createdAt: e.createdAt || e.date,
             });
           }
@@ -413,37 +447,43 @@
       const cmp = {
         'createdAt_desc': (a,b)=> new Date(b.createdAt) - new Date(a.createdAt),
         'createdAt_asc' : (a,b)=> new Date(a.createdAt) - new Date(b.createdAt),
-        'date_desc'     : (a,b)=> new Date(b.date) - new Date(a.date),
-        'date_asc'      : (a,b)=> new Date(a.date) - new Date(b.date),
         'amount_desc'   : (a,b)=> b.amount - a.amount,
         'amount_asc'    : (a,b)=> a.amount - b.amount,
       }[mode] || ((a,b)=> new Date(b.createdAt) - new Date(a.createdAt));
       return list.slice().sort(cmp);
     }
+    function filterByRange(list, mode){
+      if(mode==='all') return list;
+      const days = Number(mode)||30;
+      const now = new Date();
+      const from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - days);
+      return list.filter(x => new Date(x.createdAt) >= from);
+    }
     function renderHistory(state, year){
       const q = (histSearch.value||'').trim().toLowerCase();
       let list = collectExpensesForYear(state, year);
-      if(q){
-        list = list.filter(x =>
-          (x.projectName||'').toLowerCase().includes(q)
-        );
-      }
+      if(q){ list = list.filter(x => (x.projectName||'').toLowerCase().includes(q)); }
+      list = filterByRange(list, histRange.value);
       list = sortExpenses(list, histSort.value);
+
       histTbody.innerHTML = '';
       if(list.length===0){
-        histTbody.innerHTML = `<tr><td colspan="4" class="hint">Aucune dépense${q?' pour votre recherche':''}.</td></tr>`;
+        histTbody.innerHTML = `<tr><td colspan="3" class="hint">Aucune dépense${q?' pour votre recherche':''}.</td></tr>`;
+        histSummary.textContent = '0 ligne · Total 0,00 €';
         return;
       }
+      let total = 0;
       list.forEach(x=>{
+        total += Number(x.amount||0);
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td>${x.projectName}</td>
           <td>${fmtEUR.format(x.amount)}</td>
-          <td>${x.date || '—'}</td>
           <td>${fmtDate(x.createdAt)}</td>
         `;
         histTbody.appendChild(tr);
       });
+      histSummary.textContent = `${list.length} ${list.length>1?'lignes':'ligne'} · Total ${fmtEUR.format(total)}`;
     }
 
     // --- Actions Projets ---
@@ -462,8 +502,10 @@
       if(editingId){
         const p = (svc.projects||[]).find(x=>x.id===editingId);
         if(p){ p.name = name; p.budget = budget; }
+        showToast('Projet mis à jour.');
       }else{
         (svc.projects = svc.projects || []).push({ id: uuid(), name, budget, expenses: [] });
+        showToast('Projet ajouté.');
       }
 
       saveState(state);
@@ -488,15 +530,33 @@
         if(p){ editingId = p.id; projectName.value=p.name; projectBudget.value=p.budget; window.scrollTo({top:0, behavior:'smooth'}); }
       }
       if(t.dataset.del){
-        if(!confirm('Supprimer ce projet ?')) return;
+        const p = (svc.projects||[]).find(x=>x.id===t.dataset.del);
+        if(!p) return;
+        if(!confirm(`Supprimer le projet « ${p.name} » ?`)) return;
         svc.projects = (svc.projects||[]).filter(x=>x.id!==t.dataset.del);
         saveState(state);
         render(year);
+        showToast('Projet supprimé.');
       }
     });
 
     // --- Dépenses ---
-    addExpenseBtn.addEventListener('click', ()=>{
+    function updateExpenseButtonState(){
+      const valid =
+        expenseProject.value &&
+        Number(expenseAmount.value) > 0 &&
+        /\d{4}-\d{2}-\d{2}/.test(expenseDate.value||'');
+      addExpenseBtn.disabled = !valid;
+    }
+    expenseProject.addEventListener('change', updateExpenseButtonState);
+    expenseAmount.addEventListener('input', updateExpenseButtonState);
+    expenseDate.addEventListener('input', updateExpenseButtonState);
+
+    addExpenseBtn.addEventListener('click', addExpense);
+    expenseAmount.addEventListener('keydown', (e)=>{
+      if(e.key==='Enter'){ e.preventDefault(); addExpense(); }
+    });
+    function addExpense(){
       const year = Number(yearSelect.value);
       const state = loadState(year);
       const svc = state.services[SERVICE_NAME];
@@ -516,8 +576,11 @@
       saveState(state);
 
       expenseAmount.value='';
+      updateExpenseButtonState();
       render(year);
-    });
+      showToast('Dépense ajoutée.');
+      expenseAmount.focus();
+    }
 
     // --- Year select ---
     function setYearOptions(selected){
@@ -551,17 +614,9 @@
     });
 
     // --- Historique interactions ---
-    histSearch.addEventListener('input', ()=>{
-      const y = Number(yearSelect.value);
-      const st = loadState(y);
-      renderHistory(st, y);
-    });
-    histSort.addEventListener('change', ()=>{
-      const y = Number(yearSelect.value);
-      const st = loadState(y);
-      renderHistory(st, y);
-    });
-    // (Bouton Effacer supprimé)
+    histSearch.addEventListener('input', ()=>{ const y = Number(yearSelect.value); renderHistory(loadState(y), y); });
+    histRange.addEventListener('change', ()=>{ const y = Number(yearSelect.value); renderHistory(loadState(y), y); });
+    histSort.addEventListener('change', ()=>{ const y = Number(yearSelect.value); renderHistory(loadState(y), y); });
 
     // --- Export / Import ---
     exportBtn.addEventListener('click', ()=>{
@@ -578,6 +633,7 @@
       a.download=`budgets-multi-${ts}.json`;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+      showToast('Export JSON généré.');
     });
     importBtn.addEventListener('click', ()=> importFile.click());
     importFile.addEventListener('change', ()=>{
@@ -599,7 +655,7 @@
           }
           setYearOptions(Number(yearSelect.value));
           render(Number(yearSelect.value));
-          alert('Import terminé.');
+          showToast('Import terminé.');
         }catch(e){ console.error(e); alert('Impossible de lire le JSON.'); }
         importFile.value='';
       };
@@ -617,6 +673,7 @@
       setYearOptions(current);
       render(current);
       if(!expenseDate.value) expenseDate.value = todayISO();
+      updateExpenseButtonState();
     })();
   })();
   </script>
