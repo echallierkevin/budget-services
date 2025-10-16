@@ -36,7 +36,6 @@
     button{cursor:pointer;font-weight:700;border:1px solid transparent;background:var(--accent);color:#3b2c00}
     button:disabled{opacity:.6;cursor:not-allowed}
     button.ghost{background:#fff;border-color:var(--border)}
-    button.danger{background:var(--danger);color:#fff}
     table{width:100%;border-collapse:collapse}
     th,td{padding:10px;border-bottom:1px solid var(--border);text-align:left}
     th{color:var(--muted);background:#fff;position:sticky;top:0;z-index:1}
@@ -63,18 +62,24 @@
     .pill{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border);padding:6px 10px;border-radius:999px;background:#fff;color:#0f172a;font-weight:700}
     .summary{display:flex;justify-content:flex-end;color:var(--muted);font-size:.9rem;margin-top:8px}
 
-    /* Export/Import compact */
-    .tools-compact{padding:10px;border-radius:12px}
-    .tools-compact h2{font-size:.95rem;color:var(--muted);margin-bottom:8px}
-    .btn-tiny{padding:6px 10px;font-size:.85rem;border-radius:8px}
-    .text-muted{font-size:.85rem;color:var(--muted)}
-
     /* Toast */
     .toast{position:fixed;right:16px;bottom:16px;background:#fff;border:1px solid var(--border);box-shadow:0 10px 30px rgba(0,0,0,.08);
       padding:10px 12px;border-radius:12px;display:none;gap:10px;align-items:center;z-index:60}
     .toast.show{display:flex;animation:fadein .15s ease}
     .toast .dot{width:10px;height:10px;border-radius:999px;background:var(--ok)}
     @keyframes fadein{from{opacity:.5;transform:translateY(6px)} to{opacity:1;transform:none}}
+
+    /* ==== Bouton outils (menu compact) ==== */
+    .tools{position:relative}
+    .tools button{padding:8px 10px;font-size:.9rem;background:#fff;border:1px solid var(--border);color:#0f172a}
+    .tools .label{display:none}
+    @media (min-width:760px){ .tools .label{display:inline} }
+    .menu{position:absolute;top:calc(100% + 8px);right:0;background:#fff;border:1px solid var(--border);border-radius:12px;
+      box-shadow:0 12px 32px rgba(0,0,0,.08);min-width:230px;display:none;z-index:10;padding:6px}
+    .menu.open{display:block}
+    .menu button{width:100%;text-align:left;background:#fff;border:0;padding:10px 12px;border-radius:10px}
+    .menu button:hover{background:#f9fafb}
+    .menu small{color:var(--muted)}
   </style>
 </head>
 <body>
@@ -92,6 +97,18 @@
       <div class="spacer"></div>
       <label class="hint" for="yearSelect">Exercice</label>
       <select id="yearSelect" style="min-width:180px"></select>
+
+      <!-- Outils (menu compact) -->
+      <div class="tools" id="tools">
+        <button id="toolsBtn" aria-expanded="false" aria-haspopup="true" title="Outils">
+          ⋯ <span class="label">Outils</span>
+        </button>
+        <div class="menu" id="toolsMenu" role="menu" aria-label="Outils">
+          <button id="exportJsonBtn" role="menuitem">Exporter JSON <small>(toutes années)</small></button>
+          <button id="importJsonBtn" role="menuitem">Importer JSON…</button>
+        </div>
+        <input id="importFile" type="file" accept="application/json" style="display:none" />
+      </div>
     </div>
 
     <div class="hr"></div>
@@ -142,7 +159,7 @@
         </div>
         <div class="row" style="margin-top:8px">
           <button id="addExpenseBtn" disabled>Ajouter la dépense</button>
-          <span class="hint">Astuce : appuyez sur Entrée dans “Montant” pour valider.</span>
+          <span class="hint">Astuce : Entrée dans “Montant” valide.</span>
         </div>
       </div>
     </div>
@@ -163,7 +180,7 @@
         </thead>
         <tbody id="projectsTbody"></tbody>
       </table>
-      <div class="hint">Astuce : ✏️ charge un projet dans le formulaire, 🗑️ supprime le projet.</div>
+      <div class="hint">Astuce : ✏️ charge le projet, 🗑️ supprime le projet.</div>
     </div>
 
     <!-- Historique des dépenses -->
@@ -199,18 +216,6 @@
       </table>
       <div id="histSummary" class="summary">—</div>
     </div>
-
-    <!-- Export / Import compact -->
-    <div class="card tools-compact" style="margin-top:16px">
-      <h2>Export / Import</h2>
-      <div class="row" style="gap:6px">
-        <button id="exportBtn" class="btn-tiny">Exporter (JSON)</button>
-        <input id="importFile" type="file" accept="application/json" style="display:none" />
-        <button id="importBtn" class="btn-tiny ghost">Importer</button>
-        <div class="spacer"></div>
-        <span class="text-muted">Sauvegarde/restaure l’état complet (tous services & exercices).</span>
-      </div>
-    </div>
   </div>
 
   <!-- Toast -->
@@ -220,14 +225,92 @@
 
   <script>
   (function(){
-    // === CONFIG SERVICE ===
-    const SERVICE_NAME = "RH";
+    // =====================================================================
+    //            REMOTE JSON STORE (Global budgets.json)
+    // =====================================================================
+    // 🔧 A METTRE A JOUR : URL absolue vers ton fichier JSON
+    const STORE_URL = "https://github.com/echallierkevin/budget-services/budgets.json"; // <-- change-moi
 
-    // --- Constantes & DOM ---
+    // Optionnel: si ton serveur renvoie ETag, on l'utilise pour If-Match
+    let __etag = null;
+    let __cache = null; // { years: { ... } }
+
+    async function fetchJson(url){
+      const res = await fetch(url, { cache: 'no-store' });
+      if(res.status === 404) return { ok:false, status:404 };
+      if(!res.ok) throw new Error('GET failed '+res.status);
+      const et = res.headers.get('ETag');
+      __etag = et;
+      return { ok:true, json: await res.json() };
+    }
+    async function putJson(url, data){
+      const headers = { 'Content-Type':'application/json' };
+      if(__etag) headers['If-Match'] = __etag; // si dispo
+      const res = await fetch(url, { method:'PUT', headers, body: JSON.stringify(data) });
+      if(res.status===412){ // Precondition Failed -> ETag conflict
+        throw new Error('CONFLICT');
+      }
+      if(!res.ok) throw new Error('PUT failed '+res.status);
+      const et = res.headers.get('ETag');
+      if(et) __etag = et;
+      return true;
+    }
+    async function ensureFileExists(){
+      // Si 404, on tente de créer un fichier vide via PUT
+      try{
+        const head = await fetch(STORE_URL, { method:'HEAD', cache:'no-store' });
+        if(head.status===404){
+          await putJson(STORE_URL, { years:{} });
+        }
+      }catch(e){
+        // certains serveurs n'autorisent pas HEAD -> on ignore
+      }
+    }
+    async function storeLoadAll(){
+      if(__cache) return __cache;
+      const res = await fetchJson(STORE_URL);
+      if(!res.ok && res.status===404){
+        await ensureFileExists();
+        await putJson(STORE_URL, { years:{} });
+        __cache = { years:{} };
+        return __cache;
+      }
+      __cache = res.json || { years:{} };
+      if(!__cache.years) __cache = { years:{} };
+      return __cache;
+    }
+    async function storeSaveAll(nextData){
+      // gestion d'un léger conflit: on retente une fois si ETag conflict
+      try{
+        await putJson(STORE_URL, nextData);
+        __cache = nextData;
+      }catch(e){
+        if(e && e.message==='CONFLICT'){
+          // recharger, fusion simple (on écrase par nos modifs), puis réessayer
+          const latest = await storeLoadAll();
+          // ici on peut faire une vraie merge si besoin; pour simpleté on remplace
+          await putJson(STORE_URL, nextData);
+          __cache = nextData;
+        }else{
+          throw e;
+        }
+      }
+    }
+    async function updateStore(mutator){
+      const data = await storeLoadAll();
+      const cloned = JSON.parse(JSON.stringify(data));
+      await mutator(cloned);
+      await storeSaveAll(cloned);
+    }
+
+    // =====================================================================
+    //                        APP RH (même UI)
+    // =====================================================================
+    const SERVICE_NAME = "RH";
     const SERVICES = ["Marketing","RH","RH","Production","Logistique"];
-    const LS_PREFIX = "bt-state-";
     const ADD_YEAR_VALUE="__add__";
 
+    // DOM
     const svcTitle = document.getElementById('svcTitle');
     svcTitle.textContent = SERVICE_NAME;
 
@@ -259,9 +342,12 @@
     const histTbody = document.getElementById('histTbody');
     const histSummary = document.getElementById('histSummary');
 
-    // Export/Import
-    const exportBtn = document.getElementById('exportBtn');
-    const importBtn = document.getElementById('importBtn');
+    // Outils / menu
+    const tools = document.getElementById('tools');
+    const toolsBtn = document.getElementById('toolsBtn');
+    const toolsMenu = document.getElementById('toolsMenu');
+    const exportJsonBtn = document.getElementById('exportJsonBtn');
+    const importJsonBtn = document.getElementById('importJsonBtn');
     const importFile = document.getElementById('importFile');
 
     // Toast
@@ -275,84 +361,32 @@
       toastTimer = setTimeout(()=> toast.classList.remove('show'), 1800);
     }
 
-    // --- Utils ---
+    // Utils
     const fmtEUR = new Intl.NumberFormat('fr-FR', { style:'currency', currency:'EUR' });
-    function getKey(year){ return "bt-state-"+String(year); }
     function todayISO(){ return new Date().toISOString().slice(0,10); }
     function uuid(){ return (crypto.randomUUID ? crypto.randomUUID() : ('p-'+Date.now()+Math.random())); }
     function parseY(d){ return Number(String(d||'').slice(0,4)); }
     function fmtDate(d){ if(!d) return '—'; try{ const dt=new Date(d); return dt.toLocaleString('fr-FR'); }catch{ return d; } }
 
-    // --- State helpers ---
-    function emptyState(year){
-      const services={}; SERVICES.forEach(s=> services[s]={projects:[]});
-      return { year, services };
-    }
-    function ensureSchema(state){
-      if(!state.services){
-        const services={}; SERVICES.forEach(s=> services[s]={projects:[]});
-        state = { year: state.year, services };
-      }
+    // Helpers de données (dans la structure globale { years: { [year]: { services: { [svc]: { projects:[] } } } } })
+    function ensureYearStruct(all, year){
+      if(!all.years) all.years = {};
+      if(!all.years[year]) all.years[year] = { year:Number(year), services:{} };
       SERVICES.forEach(s=>{
-        if(!state.services[s]) state.services[s]={projects:[]};
-        state.services[s].projects = state.services[s].projects || [];
-        state.services[s].projects.forEach(p=>{
-          p.expenses = Array.isArray(p.expenses)?p.expenses:[];
-        });
+        if(!all.years[year].services[s]) all.years[year].services[s] = { projects: [] };
+        const svc = all.years[year].services[s];
+        svc.projects = svc.projects || [];
+        svc.projects.forEach(p=> p.expenses = Array.isArray(p.expenses)?p.expenses:[]);
       });
-      return state;
     }
-    function loadYears(){
-      const years=[];
-      for(let i=0;i<localStorage.length;i++){
-        const k=localStorage.key(i);
-        if(k && k.startsWith(LS_PREFIX)){
-          const y=parseInt(k.replace(LS_PREFIX,''),10);
-          if(!Number.isNaN(y)) years.push(y);
-        }
-      }
-      if(years.length===0) years.push(new Date().getFullYear());
-      years.sort((a,b)=>a-b);
-      return years;
+    function getYears(all){
+      return Object.keys(all.years||{}).map(n=>Number(n)).sort((a,b)=>a-b);
     }
-    function loadState(year){
-      const raw = localStorage.getItem(getKey(year));
-      if(!raw){
-        const st = emptyState(year);
-        localStorage.setItem(getKey(year), JSON.stringify(st));
-        return st;
-      }
-      try{ return ensureSchema(JSON.parse(raw)); }
-      catch(e){
-        const st = emptyState(year);
-        localStorage.setItem(getKey(year), JSON.stringify(st));
-        return st;
-      }
-    }
-    function saveState(state){
-      localStorage.setItem(getKey(state.year), JSON.stringify(state));
-    }
-
-    function setYearOptions(selected){
-      const years = loadYears();
-      yearSelect.innerHTML='';
-      years.forEach(y=>{
-        const opt=document.createElement('option');
-        opt.value=y; opt.textContent=y;
-        if(String(y)===String(selected)) opt.selected=true;
-        yearSelect.appendChild(opt);
-      });
-      const optAdd=document.createElement('option');
-      optAdd.value=ADD_YEAR_VALUE;
-      optAdd.textContent="➕ Ajouter un exercice…";
-      yearSelect.appendChild(optAdd);
-    }
-
-    // --- Calculs ---
-    function totalsForService(state){
-      const svc = state.services[SERVICE_NAME] || {projects:[]};
-      const budget = svc.projects.reduce((a,p)=> a + Number(p.budget||0), 0);
-      const spent  = svc.projects.reduce((a,p)=> a + (p.expenses||[]).reduce((x,e)=> x + Number(e.amount||0), 0), 0);
+    function totalsForService(all, year){
+      ensureYearStruct(all, year);
+      const svc = all.years[year].services[SERVICE_NAME];
+      const budget = (svc.projects||[]).reduce((a,p)=> a + Number(p.budget||0), 0);
+      const spent  = (svc.projects||[]).reduce((a,p)=> a + (p.expenses||[]).reduce((x,e)=> x + Number(e.amount||0), 0), 0);
       return { budget, spent, left: budget - spent };
     }
     function totalsForProject(p){
@@ -367,8 +401,27 @@
       return {cls:'over', txt:'❌ Dépassement'};
     }
 
-    function refreshProjectSelect(state){
-      const svc = state.services[SERVICE_NAME];
+    // UI state
+    let currentYear = null;
+    let allData = null; // cache mémoire
+
+    function setYearOptions(selected){
+      const years = getYears(allData);
+      yearSelect.innerHTML='';
+      years.forEach(y=>{
+        const opt=document.createElement('option');
+        opt.value=y; opt.textContent=y;
+        if(String(y)===String(selected)) opt.selected=true;
+        yearSelect.appendChild(opt);
+      });
+      const optAdd=document.createElement('option');
+      optAdd.value=ADD_YEAR_VALUE;
+      optAdd.textContent="➕ Ajouter un exercice…";
+      yearSelect.appendChild(optAdd);
+    }
+
+    function refreshProjectSelect(){
+      const svc = allData.years[currentYear].services[SERVICE_NAME];
       expenseProject.innerHTML='';
       (svc.projects||[]).forEach(p=>{
         const opt=document.createElement('option');
@@ -376,12 +429,12 @@
       });
     }
 
-    // --- Render Projets + KPIs ---
-    function render(year){
-      const state = loadState(year);
-      const svc = state.services[SERVICE_NAME];
+    function render(){
+      ensureYearStruct(allData, currentYear);
+      const svc = allData.years[currentYear].services[SERVICE_NAME];
+
       // KPIs
-      const t=totalsForService(state);
+      const t=totalsForService(allData, currentYear);
       const used = t.budget>0 ? (t.spent/t.budget)*100 : (t.spent>0?999:0);
       kpiBudget.textContent = fmtEUR.format(t.budget);
       kpiSpent.textContent  = fmtEUR.format(t.spent);
@@ -414,28 +467,27 @@
       });
 
       // Select dépenses
-      refreshProjectSelect(state);
+      refreshProjectSelect();
 
-      // Historique (exercice)
-      renderHistory(state, year);
+      // Historique
+      renderHistory();
 
       if(!expenseDate.value) expenseDate.value = todayISO();
       histService.textContent = SERVICE_NAME;
-      histYear.textContent = String(year);
+      histYear.textContent = String(currentYear);
     }
 
-    // --- Historique des dépenses ---
-    function collectExpensesForYear(state, year){
-      const svc = state.services[SERVICE_NAME] || {projects:[]};
+    function collectExpensesForYear(){
+      const svc = allData.years[currentYear].services[SERVICE_NAME] || {projects:[]};
       const items = [];
       (svc.projects||[]).forEach(p=>{
         (p.expenses||[]).forEach(e=>{
-          if(parseY(e.date) === year){
+          if(parseY(e.date) === currentYear){
             items.push({
               projectId: p.id,
               projectName: p.name,
               amount: Number(e.amount||0),
-              date: e.date,                   // conservé en data mais plus affiché
+              date: e.date,
               createdAt: e.createdAt || e.date,
             });
           }
@@ -459,9 +511,9 @@
       const from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - days);
       return list.filter(x => new Date(x.createdAt) >= from);
     }
-    function renderHistory(state, year){
+    function renderHistory(){
       const q = (histSearch.value||'').trim().toLowerCase();
-      let list = collectExpensesForYear(state, year);
+      let list = collectExpensesForYear();
       if(q){ list = list.filter(x => (x.projectName||'').toLowerCase().includes(q)); }
       list = filterByRange(list, histRange.value);
       list = sortExpenses(list, histSort.value);
@@ -486,44 +538,44 @@
       histSummary.textContent = `${list.length} ${list.length>1?'lignes':'ligne'} · Total ${fmtEUR.format(total)}`;
     }
 
-    // --- Actions Projets ---
+    // Actions Projets
     let editingId = null;
 
-    saveProjectBtn.addEventListener('click', ()=>{
-      const year = Number(yearSelect.value);
-      const state = loadState(year);
-      const svc = state.services[SERVICE_NAME];
-
+    saveProjectBtn.addEventListener('click', async ()=>{
       const name = (projectName.value||'').trim();
       const budget = Number(projectBudget.value||0);
       if(!name){ alert('Nom de projet requis'); return; }
       if(!(budget>=0)){ alert('Budget invalide'); return; }
 
-      if(editingId){
-        const p = (svc.projects||[]).find(x=>x.id===editingId);
-        if(p){ p.name = name; p.budget = budget; }
-        showToast('Projet mis à jour.');
-      }else{
-        (svc.projects = svc.projects || []).push({ id: uuid(), name, budget, expenses: [] });
-        showToast('Projet ajouté.');
-      }
+      await updateStore(async (next)=>{
+        ensureYearStruct(next, currentYear);
+        const svc = next.years[currentYear].services[SERVICE_NAME];
+        if(editingId){
+          const p = (svc.projects||[]).find(x=>x.id===editingId);
+          if(p){ p.name = name; p.budget = budget; }
+          showToast('Projet mis à jour.');
+        }else{
+          (svc.projects = svc.projects || []).push({ id: uuid(), name, budget, expenses: [] });
+          showToast('Projet ajouté.');
+        }
+      }).catch(err=>{
+        console.error(err);
+        alert("Impossible d'enregistrer (serveur).");
+      });
 
-      saveState(state);
+      allData = await storeLoadAll();
       editingId = null;
       projectName.value=''; projectBudget.value='';
-      render(year);
+      render();
     });
 
-    resetProjectBtn.addEventListener('click', ()=>{
-      editingId=null; projectName.value=''; projectBudget.value='';
-    });
+    resetProjectBtn.addEventListener('click', ()=>{ editingId=null; projectName.value=''; projectBudget.value=''; });
 
-    projectsTbody.addEventListener('click', (e)=>{
+    projectsTbody.addEventListener('click', async (e)=>{
       const t = e.target;
       if(!(t instanceof HTMLElement)) return;
-      const year = Number(yearSelect.value);
-      const state = loadState(year);
-      const svc = state.services[SERVICE_NAME];
+
+      const svc = allData.years[currentYear].services[SERVICE_NAME];
 
       if(t.dataset.edit){
         const p = (svc.projects||[]).find(x=>x.id===t.dataset.edit);
@@ -533,14 +585,20 @@
         const p = (svc.projects||[]).find(x=>x.id===t.dataset.del);
         if(!p) return;
         if(!confirm(`Supprimer le projet « ${p.name} » ?`)) return;
-        svc.projects = (svc.projects||[]).filter(x=>x.id!==t.dataset.del);
-        saveState(state);
-        render(year);
+
+        await updateStore(async (next)=>{
+          ensureYearStruct(next, currentYear);
+          const s2 = next.years[currentYear].services[SERVICE_NAME];
+          s2.projects = (s2.projects||[]).filter(x=>x.id!==t.dataset.del);
+        }).catch(err=>{ console.error(err); alert("Suppression impossible (serveur)."); });
+
+        allData = await storeLoadAll();
+        render();
         showToast('Projet supprimé.');
       }
     });
 
-    // --- Dépenses ---
+    // Dépenses
     function updateExpenseButtonState(){
       const valid =
         expenseProject.value &&
@@ -553,14 +611,8 @@
     expenseDate.addEventListener('input', updateExpenseButtonState);
 
     addExpenseBtn.addEventListener('click', addExpense);
-    expenseAmount.addEventListener('keydown', (e)=>{
-      if(e.key==='Enter'){ e.preventDefault(); addExpense(); }
-    });
-    function addExpense(){
-      const year = Number(yearSelect.value);
-      const state = loadState(year);
-      const svc = state.services[SERVICE_NAME];
-
+    expenseAmount.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); addExpense(); }});
+    async function addExpense(){
       const pid = expenseProject.value;
       const amt = Number(expenseAmount.value||0);
       const dt  = expenseDate.value || todayISO();
@@ -569,111 +621,126 @@
       if(!(amt>0)){ alert('Montant invalide (>0)'); return; }
       if(!/\d{4}-\d{2}-\d{2}/.test(dt)){ alert('Date invalide'); return; }
 
-      const p = (svc.projects||[]).find(x=>x.id===pid);
-      if(!p){ alert('Projet introuvable'); return; }
+      await updateStore(async (next)=>{
+        ensureYearStruct(next, currentYear);
+        const svc = next.years[currentYear].services[SERVICE_NAME];
+        const p = (svc.projects||[]).find(x=>x.id===pid);
+        if(!p) throw new Error('Projet introuvable');
+        (p.expenses = p.expenses || []).push({ amount: amt, date: dt, createdAt: new Date().toISOString() });
+      }).catch(err=>{
+        console.error(err);
+        alert("Ajout impossible (serveur).");
+      });
 
-      p.expenses.push({ amount: amt, date: dt, createdAt: new Date().toISOString() });
-      saveState(state);
-
+      allData = await storeLoadAll();
       expenseAmount.value='';
       updateExpenseButtonState();
-      render(year);
+      render();
       showToast('Dépense ajoutée.');
       expenseAmount.focus();
     }
 
-    // --- Year select ---
-    function setYearOptions(selected){
-      const years = loadYears();
-      yearSelect.innerHTML='';
-      years.forEach(y=>{
-        const opt=document.createElement('option');
-        opt.value=y; opt.textContent=y;
-        if(String(y)===String(selected)) opt.selected=true;
-        yearSelect.appendChild(opt);
-      });
-      const optAdd=document.createElement('option');
-      optAdd.value=ADD_YEAR_VALUE;
-      optAdd.textContent="➕ Ajouter un exercice…";
-      yearSelect.appendChild(optAdd);
-    }
-
-    yearSelect.addEventListener('change', ()=>{
+    // Changement d'année
+    yearSelect.addEventListener('change', async ()=>{
       if(yearSelect.value===ADD_YEAR_VALUE){
         const y = prompt("Nouvel exercice (YYYY) :", String(new Date().getFullYear()+1));
-        if(!y){ setYearOptions(loadYears().slice(-1)[0]); render(Number(yearSelect.value)); return; }
-        const ny=parseInt(y,10);
-        if(!ny || ny<2000 || ny>9999){ alert('Année invalide.'); setYearOptions(loadYears().slice(-1)[0]); render(Number(yearSelect.value)); return; }
-        if(!localStorage.getItem(getKey(ny))){
-          localStorage.setItem(getKey(ny), JSON.stringify(emptyState(ny)));
-        }
-        setYearOptions(ny); render(ny);
+        const ny = parseInt(y||'',10);
+        if(!ny || ny<2000 || ny>9999){ return; }
+        await updateStore(async (next)=>{ ensureYearStruct(next, ny); }).catch(err=>{
+          console.error(err); alert("Création d'exercice impossible (serveur).");
+        });
+        allData = await storeLoadAll();
+        setYearOptions(ny);
+        currentYear = ny;
+        render();
       }else{
-        render(Number(yearSelect.value));
+        currentYear = Number(yearSelect.value);
+        render();
       }
     });
 
-    // --- Historique interactions ---
-    histSearch.addEventListener('input', ()=>{ const y = Number(yearSelect.value); renderHistory(loadState(y), y); });
-    histRange.addEventListener('change', ()=>{ const y = Number(yearSelect.value); renderHistory(loadState(y), y); });
-    histSort.addEventListener('change', ()=>{ const y = Number(yearSelect.value); renderHistory(loadState(y), y); });
+    // Historique interactions
+    histSearch.addEventListener('input', renderHistory);
+    histRange.addEventListener('change', renderHistory);
+    histSort.addEventListener('change', renderHistory);
 
-    // --- Export / Import ---
-    exportBtn.addEventListener('click', ()=>{
-      const data = (function collectAll(){
-        const out = { years:{} };
-        const ys = loadYears();
-        ys.forEach(y=> out.years[y]=loadState(y));
-        return out;
-      })();
-      const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
-      const a=document.createElement('a');
-      a.href=URL.createObjectURL(blob);
-      const ts=new Date().toISOString().replace(/[:.]/g,'-');
-      a.download=`budgets-multi-${ts}.json`;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(()=>URL.revokeObjectURL(a.href),1500);
-      showToast('Export JSON généré.');
+    // Menu Outils
+    function openMenu(){
+      toolsMenu.classList.add('open');
+      toolsBtn.setAttribute('aria-expanded','true');
+      document.addEventListener('click', outsideClose, { capture:true });
+      document.addEventListener('keydown', escClose);
+    }
+    function closeMenu(){
+      toolsMenu.classList.remove('open');
+      toolsBtn.setAttribute('aria-expanded','false');
+      document.removeEventListener('click', outsideClose, { capture:true });
+      document.removeEventListener('keydown', escClose);
+    }
+    function outsideClose(e){ if(!tools.contains(e.target)) closeMenu(); }
+    function escClose(e){ if(e.key==='Escape') closeMenu(); }
+    toolsBtn.addEventListener('click', ()=>{ toolsMenu.classList.contains('open') ? closeMenu() : openMenu(); });
+
+    // Export / Import (menu)
+    exportJsonBtn.addEventListener('click', async ()=>{
+      try{
+        const data = await storeLoadAll();
+        const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
+        const a=document.createElement('a');
+        a.href=URL.createObjectURL(blob);
+        const ts=new Date().toISOString().replace(/[:.]/g,'-');
+        a.download=`budgets-multi-${ts}.json`;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+        showToast('Export JSON généré.');
+      }catch(e){ alert('Export impossible.'); }
+      closeMenu();
     });
-    importBtn.addEventListener('click', ()=> importFile.click());
-    importFile.addEventListener('change', ()=>{
+
+    importJsonBtn.addEventListener('click', ()=>{ importFile.click(); closeMenu(); });
+    importFile.addEventListener('change', async ()=>{
       const f = importFile.files && importFile.files[0];
       if(!f) return;
       const reader=new FileReader();
-      reader.onload=()=>{
+      reader.onload=async ()=>{
         try{
           const json = JSON.parse(String(reader.result||'{}'));
-          if(json && json.years){
-            Object.keys(json.years).forEach(y=>{
-              const st = json.years[y];
-              localStorage.setItem(getKey(st.year||y), JSON.stringify(st));
-            });
-          }else if(json && json.year){
-            localStorage.setItem(getKey(json.year), JSON.stringify(json));
-          }else{
-            alert('Fichier JSON non reconnu.'); return;
-          }
-          setYearOptions(Number(yearSelect.value));
-          render(Number(yearSelect.value));
+          // Merge simple: on remplace tout (le plus simple & cohérent)
+          await storeSaveAll(json && json.years ? json : { years: json.years ? json.years : {} });
+          allData = await storeLoadAll();
+          setYearOptions(currentYear);
+          render();
           showToast('Import terminé.');
-        }catch(e){ console.error(e); alert('Impossible de lire le JSON.'); }
+        }catch(e){ console.error(e); alert('Import JSON invalide/serveur indisponible.'); }
         importFile.value='';
       };
       reader.readAsText(f);
     });
 
-    // --- Init ---
-    (function init(){
-      document.title = SERVICE_NAME + " – Budgets par Projets";
-      const years = loadYears();
+    // Init
+    (async function init(){
+      try{
+        allData = await storeLoadAll();
+      }catch(e){
+        console.error(e);
+        alert("Le serveur de données est indisponible. Lecture seule.");
+        allData = { years:{} };
+      }
+      let years = getYears(allData);
+      if(years.length===0){
+        const y = new Date().getFullYear();
+        await updateStore(async (next)=>{ ensureYearStruct(next, y); }).catch(()=>{});
+        allData = await storeLoadAll();
+        years = getYears(allData);
+      }
       const urlYear = new URLSearchParams(location.search).get('year');
-      const current = urlYear ? Number(urlYear) :
+      currentYear = urlYear ? Number(urlYear) :
         (years.includes(new Date().getFullYear()) ? new Date().getFullYear() : years[years.length-1]);
-
-      setYearOptions(current);
-      render(current);
+      setYearOptions(currentYear);
+      render();
       if(!expenseDate.value) expenseDate.value = todayISO();
-      updateExpenseButtonState();
+      const valid = expenseProject.value && Number(expenseAmount.value)>0 && /\d{4}-\d{2}-\d{2}/.test(expenseDate.value||'');
+      addExpenseBtn.disabled = !valid;
     })();
   })();
   </script>
