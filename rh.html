@@ -24,7 +24,7 @@
     h1{font-size:1.35rem}
     h2{font-size:1.1rem;color:var(--muted)}
     .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-    .spacer{flex:1}
+    .right{margin-left:auto;display:flex;align-items:center;gap:12px}
     .card{background:#fff;border:1px solid var(--border);border-radius:16px;padding:16px}
     .grid{display:grid;gap:16px}
     .grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -71,7 +71,7 @@
 
     /* ==== Bouton outils (menu compact) ==== */
     .tools{position:relative}
-    .tools button{padding:8px 10px;font-size:.9rem;background:#fff;border:1px solid var(--border);color:#0f172a}
+    .tools > button{padding:8px 10px;font-size:.9rem;background:#fff;border:1px solid var(--border);color:#0f172a}
     .tools .label{display:none}
     @media (min-width:760px){ .tools .label{display:inline} }
     .menu{position:absolute;top:calc(100% + 8px);right:0;background:#fff;border:1px solid var(--border);border-radius:12px;
@@ -84,6 +84,7 @@
 </head>
 <body>
   <div class="wrap">
+    <!-- EN-TÊTE : bouton Outils déplacé en haut-droite, comme sur l'index -->
     <div class="row">
       <div class="brand">
         <img
@@ -94,20 +95,23 @@
           <div class="hint">Créer des projets, définir les budgets, saisir des dépenses</div>
         </div>
       </div>
-      <div class="spacer"></div>
-      <label class="hint" for="yearSelect">Exercice</label>
-      <select id="yearSelect" style="min-width:180px"></select>
 
-      <!-- Outils (menu compact) -->
-      <div class="tools" id="tools">
-        <button id="toolsBtn" aria-expanded="false" aria-haspopup="true" title="Outils">
-          ⋯ <span class="label">Outils</span>
-        </button>
-        <div class="menu" id="toolsMenu" role="menu" aria-label="Outils">
-          <button id="exportJsonBtn" role="menuitem">Exporter JSON <small>(toutes années)</small></button>
-          <button id="importJsonBtn" role="menuitem">Importer JSON…</button>
+      <!-- Groupe aligné à droite -->
+      <div class="right">
+        <label class="hint" for="yearSelect">Exercice</label>
+        <select id="yearSelect" style="min-width:180px"></select>
+
+        <!-- Outils (menu compact) -->
+        <div class="tools" id="tools">
+          <button id="toolsBtn" aria-expanded="false" aria-haspopup="true" title="Outils">
+            ⋯ <span class="label">Outils</span>
+          </button>
+          <div class="menu" id="toolsMenu" role="menu" aria-label="Outils">
+            <button id="exportJsonBtn" role="menuitem">Exporter JSON <small>(toutes années)</small></button>
+            <button id="importJsonBtn" role="menuitem">Importer JSON…</button>
+          </div>
+          <input id="importFile" type="file" accept="application/json" style="display:none" />
         </div>
-        <input id="importFile" type="file" accept="application/json" style="display:none" />
       </div>
     </div>
 
@@ -228,43 +232,32 @@
     // =====================================================================
     //            REMOTE JSON STORE (Global budgets.json)
     // =====================================================================
-    // 🔧 A METTRE A JOUR : URL absolue vers ton fichier JSON
-    const STORE_URL = "https://echallierkevin.github.io/budget-services/budgets.json"; // <-- change-moi
+    const STORE_URL = "https://echallierkevin.github.io/budget-services/budgets.json"; // <-- mets ton URL
 
-    // Optionnel: si ton serveur renvoie ETag, on l'utilise pour If-Match
     let __etag = null;
-    let __cache = null; // { years: { ... } }
+    let __cache = null;
 
     async function fetchJson(url){
       const res = await fetch(url, { cache: 'no-store' });
       if(res.status === 404) return { ok:false, status:404 };
       if(!res.ok) throw new Error('GET failed '+res.status);
-      const et = res.headers.get('ETag');
-      __etag = et;
+      __etag = res.headers.get('ETag');
       return { ok:true, json: await res.json() };
     }
     async function putJson(url, data){
       const headers = { 'Content-Type':'application/json' };
-      if(__etag) headers['If-Match'] = __etag; // si dispo
+      if(__etag) headers['If-Match'] = __etag;
       const res = await fetch(url, { method:'PUT', headers, body: JSON.stringify(data) });
-      if(res.status===412){ // Precondition Failed -> ETag conflict
-        throw new Error('CONFLICT');
-      }
+      if(res.status===412) throw new Error('CONFLICT');
       if(!res.ok) throw new Error('PUT failed '+res.status);
-      const et = res.headers.get('ETag');
-      if(et) __etag = et;
+      __etag = res.headers.get('ETag') || __etag;
       return true;
     }
     async function ensureFileExists(){
-      // Si 404, on tente de créer un fichier vide via PUT
       try{
         const head = await fetch(STORE_URL, { method:'HEAD', cache:'no-store' });
-        if(head.status===404){
-          await putJson(STORE_URL, { years:{} });
-        }
-      }catch(e){
-        // certains serveurs n'autorisent pas HEAD -> on ignore
-      }
+        if(head.status===404){ await putJson(STORE_URL, { years:{} }); }
+      }catch(e){}
     }
     async function storeLoadAll(){
       if(__cache) return __cache;
@@ -280,15 +273,12 @@
       return __cache;
     }
     async function storeSaveAll(nextData){
-      // gestion d'un léger conflit: on retente une fois si ETag conflict
       try{
         await putJson(STORE_URL, nextData);
         __cache = nextData;
       }catch(e){
         if(e && e.message==='CONFLICT'){
-          // recharger, fusion simple (on écrase par nos modifs), puis réessayer
-          const latest = await storeLoadAll();
-          // ici on peut faire une vraie merge si besoin; pour simpleté on remplace
+          await fetchJson(STORE_URL);
           await putJson(STORE_URL, nextData);
           __cache = nextData;
         }else{
@@ -304,7 +294,7 @@
     }
 
     // =====================================================================
-    //                        APP RH (même UI)
+    //                        APP RH
     // =====================================================================
     const SERVICE_NAME = "RH";
     const SERVICES = ["Marketing","RH","RH","Production","Logistique"];
@@ -368,7 +358,6 @@
     function parseY(d){ return Number(String(d||'').slice(0,4)); }
     function fmtDate(d){ if(!d) return '—'; try{ const dt=new Date(d); return dt.toLocaleString('fr-FR'); }catch{ return d; } }
 
-    // Helpers de données (dans la structure globale { years: { [year]: { services: { [svc]: { projects:[] } } } } })
     function ensureYearStruct(all, year){
       if(!all.years) all.years = {};
       if(!all.years[year]) all.years[year] = { year:Number(year), services:{} };
@@ -403,7 +392,7 @@
 
     // UI state
     let currentYear = null;
-    let allData = null; // cache mémoire
+    let allData = null;
 
     function setYearOptions(selected){
       const years = getYears(allData);
@@ -433,7 +422,6 @@
       ensureYearStruct(allData, currentYear);
       const svc = allData.years[currentYear].services[SERVICE_NAME];
 
-      // KPIs
       const t=totalsForService(allData, currentYear);
       const used = t.budget>0 ? (t.spent/t.budget)*100 : (t.spent>0?999:0);
       kpiBudget.textContent = fmtEUR.format(t.budget);
@@ -441,7 +429,6 @@
       kpiLeft.textContent   = fmtEUR.format(t.left);
       kpiUsed.textContent   = used===999?'>100%':used.toFixed(1)+' %';
 
-      // Projets
       projectsTbody.innerHTML='';
       (svc.projects||[]).forEach(p=>{
         const {spent,left,pct} = totalsForProject(p);
@@ -466,10 +453,7 @@
         projectsTbody.appendChild(tr);
       });
 
-      // Select dépenses
       refreshProjectSelect();
-
-      // Historique
       renderHistory();
 
       if(!expenseDate.value) expenseDate.value = todayISO();
@@ -640,15 +624,13 @@
       expenseAmount.focus();
     }
 
-    // Changement d'année
+    // Années
     yearSelect.addEventListener('change', async ()=>{
       if(yearSelect.value===ADD_YEAR_VALUE){
         const y = prompt("Nouvel exercice (YYYY) :", String(new Date().getFullYear()+1));
         const ny = parseInt(y||'',10);
         if(!ny || ny<2000 || ny>9999){ return; }
-        await updateStore(async (next)=>{ ensureYearStruct(next, ny); }).catch(err=>{
-          console.error(err); alert("Création d'exercice impossible (serveur).");
-        });
+        await updateStore(async (next)=>{ ensureYearStruct(next, ny); }).catch(()=>{});
         allData = await storeLoadAll();
         setYearOptions(ny);
         currentYear = ny;
@@ -681,7 +663,7 @@
     function escClose(e){ if(e.key==='Escape') closeMenu(); }
     toolsBtn.addEventListener('click', ()=>{ toolsMenu.classList.contains('open') ? closeMenu() : openMenu(); });
 
-    // Export / Import (menu)
+    // Export / Import
     exportJsonBtn.addEventListener('click', async ()=>{
       try{
         const data = await storeLoadAll();
@@ -705,7 +687,6 @@
       reader.onload=async ()=>{
         try{
           const json = JSON.parse(String(reader.result||'{}'));
-          // Merge simple: on remplace tout (le plus simple & cohérent)
           await storeSaveAll(json && json.years ? json : { years: json.years ? json.years : {} });
           allData = await storeLoadAll();
           setYearOptions(currentYear);
